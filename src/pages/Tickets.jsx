@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Eye, Calendar, Clock, X, Save, AlertTriangle, CheckCircle, Ban, Trash2, Wallet, ArrowRight, Phone, DollarSign, MapPin, Truck, Store, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle } from 'lucide-react';
 import api from '../api/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 
@@ -21,6 +21,7 @@ const Tickets = () => {
     // Modal Detalle
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [modalLoading, setModalLoading] = useState(false);
+    const [actionLoading, setActionLoading] = useState(false);
     
     // Acciones Modal
     const [newStatus, setNewStatus] = useState('');
@@ -33,35 +34,31 @@ const Tickets = () => {
     const [payAmount, setPayAmount] = useState('');
     const [payMethod, setPayMethod] = useState('EFECTIVO');
 
+    // Confirmación Personalizada (La "Ventanita")
+    const [confirmModal, setConfirmModal] = useState({ show: false, message: '', action: null, type: 'info' });
+
     const navigate = useNavigate();
 
-    // --- CARGA DE DATOS (Con Paginación) ---
+    // --- CARGA DE DATOS ---
     const fetchTickets = async (url = null) => {
         setLoading(true);
         try {
             let endpoint = url;
-            
-            // Si no es una URL de paginación, construimos la query inicial
             if (!endpoint) {
                 const params = new URLSearchParams();
                 if (statusFilter) params.append('estado', statusFilter);
                 if (dateFrom) params.append('fecha_desde', dateFrom);
                 if (dateTo) params.append('fecha_hasta', dateTo);
-                // Search term lo manejamos local o backend si tu API lo soporta
-                // params.append('search', searchTerm); 
                 endpoint = `tickets/?${params.toString()}`;
             }
 
-            // Llamada API (si es URL completa usa api.get(url) directo, si no endpoint relativo)
             const response = await (url ? api.get(url) : api.get(endpoint));
             const data = response.data;
 
-            // Manejo de paginación DRF
             const results = Array.isArray(data) ? data : data.results;
             setNextPage(data.next);
             setPrevPage(data.previous);
             
-            // Ordenar: Más recientes primero (creado_en descendente)
             const sorted = results.sort((a, b) => 
                 new Date(b.creado_en) - new Date(a.creado_en)
             );
@@ -75,7 +72,7 @@ const Tickets = () => {
 
     useEffect(() => { fetchTickets(); }, [statusFilter, dateFrom, dateTo]);
 
-    // --- LOGICA VISUAL ---
+    // --- HELPERS VISUALES ---
     const getStatusBadge = (status) => {
         const styles = {
             'RECIBIDO': 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700',
@@ -129,6 +126,7 @@ const Tickets = () => {
         setSelectedTicket(null);
         setShowCancelConfirm(false);
         setShowPayModal(false);
+        setConfirmModal({ show: false, message: '', action: null });
         try {
             const response = await api.get(`tickets/${id}/`);
             setSelectedTicket(response.data);
@@ -141,63 +139,101 @@ const Tickets = () => {
         }
     };
 
-    const handleUpdateStatus = async () => {
-        if (!selectedTicket || newStatus === selectedTicket.estado) return;
+    // Función INTERNA para ejecutar el cambio de estado (llamada tras confirmar)
+    const executeStatusUpdate = async () => {
+        setActionLoading(true);
+        setConfirmModal({ ...confirmModal, show: false }); // Cerrar ventanita de confirmación
         try {
-            await api.post(`tickets/${selectedTicket.id}/update_estado/`, {
+            const response = await api.post(`tickets/${selectedTicket.id}/update_estado/`, {
                 estado: newStatus,
                 comentario: statusComment || "Actualización rápida"
             });
-            alert("✅ Estado actualizado");
-            handleViewDetails(selectedTicket.id);
+            
+            // 1. Actualizar datos en el modal sin cerrarlo
+            if (response.data && response.data.ticket) {
+                setSelectedTicket(response.data.ticket);
+                setNewStatus(response.data.ticket.estado); // Sincronizar select
+            } else {
+                handleViewDetails(selectedTicket.id); // Fallback recarga
+            }
+            
+            // 2. Refrescar tabla de fondo
             fetchTickets();
+            
         } catch (error) {
             const msg = error.response?.data?.non_field_errors?.[0] || error.response?.data?.error || "Error al actualizar estado";
             alert(`⚠️ ${msg}`);
+        } finally {
+            setActionLoading(false);
         }
     };
 
-    const handleCancelTicket = async () => {
-        if (!cancelReason.trim()) return alert("⚠️ Motivo obligatorio.");
-        try {
-            await api.post(`tickets/${selectedTicket.id}/cancelar/`, { motivo: cancelReason });
-            alert("✅ Ticket Cancelado");
-            setSelectedTicket(null);
-            fetchTickets();
-        } catch (error) {
-            alert("❌ Error: " + (error.response?.data?.error || "Desconocido"));
-        }
+    // Handler para el botón "Guardar"
+    const onSaveStatusClick = () => {
+        if (!selectedTicket || newStatus === selectedTicket.estado) return;
+        setConfirmModal({
+            show: true,
+            message: `¿Estás seguro de cambiar el estado a "${newStatus}"?`,
+            action: executeStatusUpdate,
+            type: 'warning'
+        });
     };
 
-    const handleRegisterPayment = async () => {
-        if (!payAmount || parseFloat(payAmount) <= 0) return alert("Monto inválido");
-        const confirmMsg = `¿Confirma registrar el pago de S/ ${parseFloat(payAmount).toFixed(2)} con ${payMethod}?`;
-        if (!window.confirm(confirmMsg)) return;
-
+    // Función INTERNA para ejecutar pago (llamada tras confirmar)
+    const executePayment = async () => {
+        setActionLoading(true);
+        setConfirmModal({ ...confirmModal, show: false });
         try {
             await api.post('pagos/', {
                 ticket: selectedTicket.id,
                 monto: parseFloat(payAmount),
                 metodo_pago: payMethod,
-                estado: 'PAGADO', // <--- Forzamos estado PAGADO
+                estado: 'PAGADO',
                 origen: 'TICKETS'
             });
-            alert("✅ Pago registrado");
+            
             setShowPayModal(false);
             setPayAmount('');
+            // Recargar datos modal y tabla
             handleViewDetails(selectedTicket.id); 
             fetchTickets(); 
         } catch (error) {
             console.error(error);
             alert("❌ Error al registrar pago");
+        } finally {
+            setActionLoading(false);
         }
     };
 
-    // --- REIMPRESIÓN TICKET ---
+    // Handler para el botón "Confirmar Pago"
+    const onRegisterPaymentClick = () => {
+        if (!payAmount || parseFloat(payAmount) <= 0) return alert("Monto inválido");
+        setConfirmModal({
+            show: true,
+            message: `¿Registrar pago de S/ ${parseFloat(payAmount).toFixed(2)} con ${payMethod}?`,
+            action: executePayment,
+            type: 'money'
+        });
+    };
+
+    const handleCancelTicket = async () => {
+        if (!cancelReason.trim()) return alert("⚠️ Motivo obligatorio.");
+        setActionLoading(true);
+        try {
+            await api.post(`tickets/${selectedTicket.id}/cancelar/`, { motivo: cancelReason });
+            setSelectedTicket(null); // Aquí si cerramos porque se canceló
+            fetchTickets();
+        } catch (error) {
+            alert("❌ Error: " + (error.response?.data?.error || "Desconocido"));
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     const handleReprintTicket = () => {
         if (!selectedTicket) return;
         const ticketWindow = window.open('', '_blank', 'width=400,height=600');
-        const qrUrl = selectedTicket.qr_code_url || selectedTicket.qr_code; // Usar URL completa si existe
+        const qrUrl = selectedTicket.qr_code_url || selectedTicket.qr_code;
 
         const html = `
             <html>
@@ -205,8 +241,6 @@ const Tickets = () => {
                 <title>Reimpresión Ticket #${selectedTicket.numero_ticket}</title>
                 <style>
                     body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px; width: 80mm; text-align: center; }
-                    .system-name { font-size: 9px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
-                    .business-name { font-size: 18px; font-weight: 900; margin: 5px 0; text-transform: uppercase; display: block; }
                     .header { margin-bottom: 15px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
                     .info { text-align: left; margin-bottom: 10px; font-size: 11px; line-height: 1.4; }
                     table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; }
@@ -218,80 +252,43 @@ const Tickets = () => {
                     .sub-row { display: flex; justify-content: space-between; font-size: 12px; }
                     .qr-container { margin-top: 20px; display: flex; flex-direction: column; align-items: center; }
                     img { width: 120px; height: 120px; }
-                    .footer { margin-top: 20px; font-size: 10px; font-style: italic; color: #444; }
                     .watermark { font-size: 14px; font-weight: bold; border: 2px solid #000; padding: 5px; margin-top: 10px; display: inline-block;}
                 </style>
             </head>
             <body>
                 <div class="header">
-                    <span class="system-name">Sistema Washly</span>
-                    <span class="business-name">LAVANDERÍA SUPER CLEAN</span>
-                    <div>RUC: 20601234567</div>
-                    <div>Av. Principal 123, Lima - Perú</div>
-                    <div>Telf: (01) 234-5678</div>
+                    <strong>LAVANDERÍA SUPER CLEAN</strong><br>
+                    RUC: 20601234567<br>
+                    Av. Principal 123
                 </div>
-                
                 <div class="info">
                     <strong>TICKET: ${selectedTicket.numero_ticket}</strong><br>
-                    Fecha: ${new Date(selectedTicket.creado_en).toLocaleString()}<br>
-                    Cliente: <strong>${selectedTicket.cliente_info?.nombre_completo}</strong><br>
-                    Entrega: <strong>${selectedTicket.tipo_entrega || 'Tienda'}</strong>
+                    Cliente: <strong>${selectedTicket.cliente_info?.nombre_completo}</strong>
                 </div>
-
                 <table>
-                    <thead>
-                        <tr><th width="15%">Cant</th><th width="60%">Descripción</th><th width="25%" class="text-right">Total</th></tr>
-                    </thead>
+                    <thead><tr><th>Cant</th><th>Desc</th><th class="text-right">Total</th></tr></thead>
                     <tbody>
                         ${selectedTicket.items.map(item => `
-                            <tr>
-                                <td>${item.cantidad}</td>
-                                <td><strong>${item.servicio_nombre}</strong><br><span style="font-size:10px;">${item.descripcion || ''}</span></td>
-                                <td class="text-right">${parseFloat(item.subtotal).toFixed(2)}</td>
-                            </tr>
+                            <tr><td>${item.cantidad}</td><td>${item.servicio_nombre}</td><td class="text-right">${parseFloat(item.subtotal).toFixed(2)}</td></tr>
                         `).join('')}
                     </tbody>
                 </table>
-
                 <div class="totals">
-                    <div class="total-row">
-                        <span>TOTAL:</span>
-                        <span>S/ {selectedTicket.total.toFixed(2)}</span>
-                    </div>
-                    <div class="sub-row">
-                        <span>Pagado:</span>
-                        <span>S/ {(selectedTicket.total - selectedTicket.saldo_pendiente).toFixed(2)}</span>
-                    </div>
-                    <div class="sub-row">
-                        <span>Saldo:</span>
-                        <span>S/ {selectedTicket.saldo_pendiente.toFixed(2)}</span>
-                    </div>
+                    <div class="total-row"><span>TOTAL:</span><span>S/ ${selectedTicket.total.toFixed(2)}</span></div>
+                    <div class="sub-row"><span>Pagado:</span><span>S/ ${(selectedTicket.total - selectedTicket.saldo_pendiente).toFixed(2)}</span></div>
+                    <div class="sub-row"><span>Saldo:</span><span>S/ ${selectedTicket.saldo_pendiente.toFixed(2)}</span></div>
                 </div>
-
-                ${selectedTicket.saldo_pendiente <= 0 ? '<div class="watermark">¡CANCELADO!</div>' : ''}
-
-                <div class="qr-container">
-                    ${qrUrl ? `<img src="${qrUrl}" />` : 'QR no disponible'}
-                    <span style="font-size: 10px; margin-top: 5px;">Escanear para ver estado</span>
-                </div>
-
-                <div class="footer">
-                    * REIMPRESIÓN DE COMPROBANTE *<br>
-                    Gracias por su preferencia.
-                </div>
+                ${selectedTicket.saldo_pendiente <= 0 ? '<div class="watermark">¡PAGADO!</div>' : ''}
+                <div class="qr-container">${qrUrl ? `<img src="${qrUrl}" />` : ''}</div>
             </body>
             </html>
         `;
 
         ticketWindow.document.write(html);
         ticketWindow.document.close();
-        setTimeout(() => {
-            ticketWindow.focus();
-            ticketWindow.print();
-        }, 800);
+        setTimeout(() => { ticketWindow.focus(); ticketWindow.print(); }, 800);
     };
 
-    // Filtro local
     const filteredTickets = tickets.filter(t => 
         t.numero_ticket.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.cliente_nombre.toLowerCase().includes(searchTerm.toLowerCase())
@@ -299,7 +296,7 @@ const Tickets = () => {
 
     return (
         <div className="p-6 h-full flex flex-col text-gray-800 dark:text-gray-100 relative">
-            {/* Header */}
+            {/* ... (Header y Filtros sin cambios) ... */}
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-black tracking-tight">Gestión de Tickets</h1>
@@ -310,7 +307,6 @@ const Tickets = () => {
                 </button>
             </div>
 
-            {/* Filtros */}
             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-6 flex flex-col md:flex-row gap-4 items-center">
                 <div className="relative flex-1 w-full">
                     <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
@@ -330,7 +326,6 @@ const Tickets = () => {
                 </select>
             </div>
 
-            {/* Tabla */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex-1 flex flex-col">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -379,37 +374,30 @@ const Tickets = () => {
                     </table>
                 </div>
                 
-                {/* CONTROLES DE PAGINACIÓN */}
+                {/* Footer Paginación */}
                 <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
-                    <button 
-                        disabled={!prevPage} 
-                        onClick={() => fetchTickets(prevPage)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!prevPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}
-                    >
-                        <ChevronLeft size={16}/> Anterior
-                    </button>
+                    <button disabled={!prevPage} onClick={() => fetchTickets(prevPage)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!prevPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}><ChevronLeft size={16}/> Anterior</button>
                     <span className="text-xs text-gray-500">Navegación de Registros</span>
-                    <button 
-                        disabled={!nextPage} 
-                        onClick={() => fetchTickets(nextPage)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!nextPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}
-                    >
-                        Siguiente <ChevronRight size={16}/>
-                    </button>
+                    <button disabled={!nextPage} onClick={() => fetchTickets(nextPage)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!nextPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}>Siguiente <ChevronRight size={16}/></button>
                 </div>
             </div>
 
             {/* --- MODAL DETALLE --- */}
             {selectedTicket && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm fixed top-0 left-0 w-full h-full">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700">
-                        {/* Header */}
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700 relative">
+                        
+                        {/* Header Modal */}
                         <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start bg-gray-50 dark:bg-gray-900/50">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                                     Ticket {selectedTicket.numero_ticket}
                                     <span className={`text-xs px-2 py-1 rounded-full border ${getStatusBadge(selectedTicket.estado)}`}>{selectedTicket.estado}</span>
                                 </h2>
+                                <div className="text-base text-gray-700 dark:text-gray-300 font-bold mt-1 flex items-center gap-2">
+                                    <User size={16} className="text-gray-400"/>
+                                    {selectedTicket.cliente_info?.nombre_completo}
+                                </div>
                                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
                                     <span className="flex items-center gap-1"><Clock size={14}/> Entrega: {new Date(selectedTicket.fecha_prometida).toLocaleString()}</span>
                                     {selectedTicket.tipo_entrega && <span className="flex items-center gap-1"><MapPin size={14}/> {selectedTicket.tipo_entrega}</span>}
@@ -418,19 +406,50 @@ const Tickets = () => {
                             <button onClick={() => setSelectedTicket(null)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
                         </div>
 
-                        <div className="p-6 overflow-y-auto flex-1 space-y-6">
-                            {/* Panel Acciones */}
+                        <div className="p-6 overflow-y-auto flex-1 space-y-6 relative">
+                            
+                            {/* --- VENTANITA DE CONFIRMACIÓN (Overlay interno) --- */}
+                            {confirmModal.show && (
+                                <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 dark:bg-gray-800/90 backdrop-blur-[2px] rounded-xl animate-in fade-in">
+                                    <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-sm w-full text-center transform transition-all scale-100">
+                                        <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${confirmModal.type === 'money' ? 'bg-emerald-100 text-emerald-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                                            {confirmModal.type === 'money' ? <DollarSign size={24}/> : <AlertCircle size={24}/>}
+                                        </div>
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Confirmación</h3>
+                                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{confirmModal.message}</p>
+                                        <div className="flex gap-3">
+                                            <button 
+                                                onClick={() => setConfirmModal({...confirmModal, show: false})} 
+                                                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-sm transition-colors"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button 
+                                                onClick={confirmModal.action}
+                                                className={`flex-1 px-4 py-2 text-white rounded-xl font-bold text-sm shadow-lg transition-transform active:scale-95 ${confirmModal.type === 'money' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'}`}
+                                            >
+                                                Confirmar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50 relative">
                                     <h3 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-3 flex items-center gap-2">Gestión de Estado</h3>
                                     
-                                    {/* BOTÓN ANULAR (UBICADO AQUÍ) */}
+                                    {/* --- BOTÓN CANCELAR (Corregido: Más arriba y a la derecha) --- */}
                                     {selectedTicket.estado !== 'CANCELADO' && selectedTicket.estado !== 'ENTREGADO' && (
                                         <button 
                                             onClick={() => setShowCancelConfirm(!showCancelConfirm)}
-                                            className="absolute top-4 right-4 text-xs bg-white dark:bg-gray-800 text-red-500 border border-red-200 dark:border-red-900 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 font-bold transition-all flex gap-1 items-center"
+                                            className="absolute -top-2 right-0 flex items-center justify-center bg-white dark:bg-gray-800 text-red-500 border border-red-100 dark:border-red-900/30 rounded-full p-2 hover:pr-4 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-300 group shadow-sm z-10"
+                                            title="Cancelar Ticket"
                                         >
-                                            <Ban size={12}/> Anular
+                                            <Trash2 size={16} />
+                                            <span className="max-w-0 overflow-hidden group-hover:max-w-[100px] group-hover:ml-2 transition-all duration-300 text-xs font-bold whitespace-nowrap">
+                                                Cancelar Ticket
+                                            </span>
                                         </button>
                                     )}
 
@@ -443,17 +462,23 @@ const Tickets = () => {
                                                     <option value="LISTO">Listo</option>
                                                     <option value="ENTREGADO">Entregado</option>
                                                 </select>
-                                                <button onClick={handleUpdateStatus} disabled={newStatus === selectedTicket.estado} className={`px-3 rounded-lg font-bold text-white text-xs ${newStatus === selectedTicket.estado ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}`}>Guardar</button>
+                                                <button 
+                                                    onClick={onSaveStatusClick} 
+                                                    disabled={newStatus === selectedTicket.estado || actionLoading} 
+                                                    className={`px-3 rounded-lg font-bold text-white text-xs ${newStatus === selectedTicket.estado || actionLoading ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                                >
+                                                    {actionLoading ? '...' : 'Guardar'}
+                                                </button>
                                             </div>
                                             <input type="text" placeholder="Comentario..." value={statusComment} onChange={(e) => setStatusComment(e.target.value)} className="w-full p-2 text-xs border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
                                         </>
                                     ) : (
                                         <div className="mt-2 animate-in fade-in">
-                                            <p className="text-xs font-bold text-red-600 mb-1">Motivo de anulación:</p>
+                                            <p className="text-xs font-bold text-red-600 mb-1">Motivo de cancelación:</p>
                                             <input type="text" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className="w-full p-2 text-xs border border-red-300 rounded mb-2 dark:bg-gray-700 dark:text-white" autoFocus/>
                                             <div className="flex gap-2">
-                                                <button onClick={handleCancelTicket} className="flex-1 bg-red-600 text-white text-xs py-1.5 rounded font-bold hover:bg-red-700">Confirmar Anulación</button>
-                                                <button onClick={() => setShowCancelConfirm(false)} className="px-2 text-gray-500 text-xs hover:underline">Cancelar</button>
+                                                <button onClick={handleCancelTicket} disabled={actionLoading} className="flex-1 bg-red-600 text-white text-xs py-1.5 rounded font-bold hover:bg-red-700">Confirmar</button>
+                                                <button onClick={() => setShowCancelConfirm(false)} className="px-2 text-gray-500 text-xs hover:underline">Atrás</button>
                                             </div>
                                         </div>
                                     )}
@@ -488,7 +513,7 @@ const Tickets = () => {
                                                 </select>
                                             </div>
                                             <div className="flex gap-2 mt-1">
-                                                <button onClick={handleRegisterPayment} className="flex-1 bg-emerald-600 text-white text-xs rounded py-1 font-bold hover:bg-emerald-700">Confirmar Pago</button>
+                                                <button onClick={onRegisterPaymentClick} disabled={actionLoading} className="flex-1 bg-emerald-600 text-white text-xs rounded py-1 font-bold hover:bg-emerald-700">Pagar</button>
                                                 <button onClick={() => setShowPayModal(false)} className="px-2 text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 rounded"><X size={14}/></button>
                                             </div>
                                         </div>
@@ -496,7 +521,6 @@ const Tickets = () => {
                                 </div>
                             </div>
 
-                            {/* Items */}
                             <div className="border rounded-xl overflow-hidden dark:border-gray-700">
                                 <table className="w-full text-sm">
                                     <thead className="bg-gray-100 dark:bg-gray-700 dark:text-gray-200">
@@ -514,7 +538,6 @@ const Tickets = () => {
                                 </table>
                             </div>
 
-                            {/* Footer (Reimprimir) */}
                             <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-center">
                                 <button 
                                     onClick={handleReprintTicket}
