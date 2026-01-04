@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import MainLayout from './layouts/MainLayout';
 import Login from './pages/Login';
 import POS from './pages/POS';
+import Tickets from './pages/Tickets'; // <--- 1. IMPORTAR
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }) => {
@@ -21,8 +22,15 @@ function App() {
                     
                     <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                         <Route path="/pos" element={<POS />} />
-                        <Route path="/dashboard" element={<div className="text-2xl font-bold">Bienvenido al Dashboard</div>} />
-                        {/* Redirección por defecto */}
+                        <Route path="/tickets" element={<Tickets />} /> {/* <--- 2. AGREGAR RUTA */}
+                        <Route path="/dashboard" element={<div className="text-2xl font-bold p-6">Bienvenido al Dashboard</div>} />
+                        
+                        {/* Rutas placeholder para que el menú no de error 404 */}
+                        <Route path="/pagos" element={<div className="p-6 font-bold">Módulo de Pagos (Próximamente)</div>} />
+                        <Route path="/inventario" element={<div className="p-6 font-bold">Módulo de Inventario (Próximamente)</div>} />
+                        <Route path="/clientes" element={<div className="p-6 font-bold">Módulo de Clientes (Próximamente)</div>} />
+                        <Route path="/config" element={<div className="p-6 font-bold">Configuración (Próximamente)</div>} />
+
                         <Route path="/" element={<Navigate to="/pos" />} />
                     </Route>
                 </Routes>
