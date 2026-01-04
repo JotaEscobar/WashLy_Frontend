@@ -1,81 +1,76 @@
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, ShoppingCart, LogOut, Package, Users, Settings } from 'lucide-react';
+import { Outlet } from 'react-router-dom';
+import { useState } from 'react';
+import { Menu, Moon, Sun, Home, Package, Users, Settings, LogOut, X } from 'lucide-react';
 
 const MainLayout = () => {
-    const { logout, user } = useAuth();
-    const navigate = useNavigate();
-    const location = useLocation();
+    // Estado para la barra lateral (Abierta/Cerrada)
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+    // Estado para Modo Oscuro
+    const [darkMode, setDarkMode] = useState(false);
 
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
+    const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+    const toggleTheme = () => {
+        setDarkMode(!darkMode);
+        // Tailwind usa la clase 'dark' en el elemento html o body
+        document.documentElement.classList.toggle('dark');
     };
 
-    const menuItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: ['admin'] },
-        { icon: ShoppingCart, label: 'Punto de Venta', path: '/pos', roles: ['admin', 'cajero'] },
-        { icon: Package, label: 'Tickets', path: '/tickets', roles: ['admin', 'cajero'] },
-        { icon: Users, label: 'Clientes', path: '/clientes', roles: ['admin', 'cajero'] },
-        { icon: Settings, label: 'Configuración', path: '/settings', roles: ['admin'] },
-    ];
-
     return (
-        <div className="flex h-screen bg-surface-50">
-            {/* Sidebar */}
-            <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm fixed h-full z-10">
-                <div className="h-16 flex items-center px-6 border-b border-gray-100">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center text-white font-bold">W</div>
-                        <span className="text-xl font-bold text-gray-800 tracking-tight">WashLy</span>
-                    </div>
+        <div className={`flex h-screen bg-gray-100 ${darkMode ? 'dark' : ''}`}>
+            
+            {/* --- SIDEBAR --- */}
+            <aside 
+                className={`${sidebarOpen ? 'w-64' : 'w-20'} bg-white border-r border-gray-200 transition-all duration-300 flex flex-col z-20`}
+            >
+                {/* Logo & Toggle */}
+                <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
+                    {sidebarOpen && <span className="text-xl font-black text-blue-600 tracking-tighter">WASHLY</span>}
+                    <button onClick={toggleSidebar} className="p-2 hover:bg-gray-50 rounded-lg text-gray-500">
+                        {sidebarOpen ? <X size={20}/> : <Menu size={20}/>}
+                    </button>
                 </div>
 
-                <nav className="flex-1 py-6 px-3 space-y-1">
-                    {menuItems.map((item) => (
-                         (item.roles.includes(user?.role)) && (
-                            <button
-                                key={item.path}
-                                onClick={() => navigate(item.path)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                                    location.pathname === item.path
-                                        ? 'bg-primary-50 text-primary-600'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                }`}
-                            >
-                                <item.icon size={20} />
-                                {item.label}
-                            </button>
-                        )
-                    ))}
+                {/* Menú de Navegación (Ejemplo) */}
+                <nav className="flex-1 p-4 space-y-2">
+                    <NavItem icon={<Home size={20}/>} label="POS / Venta" isOpen={sidebarOpen} active />
+                    <NavItem icon={<Package size={20}/>} label="Tickets" isOpen={sidebarOpen} />
+                    <NavItem icon={<Users size={20}/>} label="Clientes" isOpen={sidebarOpen} />
+                    <NavItem icon={<Settings size={20}/>} label="Configuración" isOpen={sidebarOpen} />
                 </nav>
 
-                <div className="p-4 border-t border-gray-100">
-                    <div className="flex items-center gap-3 mb-4 px-2">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                            <Users size={16} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate uppercase">{user?.role}</p>
-                            <p className="text-xs text-gray-500 truncate">En línea</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                {/* Footer Sidebar */}
+                <div className="p-4 border-t border-gray-100 space-y-2">
+                    {/* Botón Dark Mode */}
+                    <button 
+                        onClick={toggleTheme}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${sidebarOpen ? 'justify-start' : 'justify-center'} hover:bg-gray-50 text-gray-600`}
                     >
-                        <LogOut size={18} />
-                        Cerrar Sesión
+                        {darkMode ? <Sun size={20}/> : <Moon size={20}/>}
+                        {sidebarOpen && <span className="font-medium text-sm">{darkMode ? 'Modo Claro' : 'Modo Oscuro'}</span>}
+                    </button>
+
+                    <button className={`w-full flex items-center gap-3 p-3 rounded-xl text-red-500 hover:bg-red-50 transition-colors ${sidebarOpen ? 'justify-start' : 'justify-center'}`}>
+                        <LogOut size={20}/>
+                        {sidebarOpen && <span className="font-medium text-sm">Cerrar Sesión</span>}
                     </button>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 ml-64 p-8 overflow-auto">
+            {/* --- CONTENIDO PRINCIPAL --- */}
+            <main className="flex-1 overflow-hidden relative">
+                {/* Aquí se renderiza el POS u otras páginas */}
                 <Outlet />
             </main>
         </div>
     );
 };
+
+// Componente auxiliar para items del menú
+const NavItem = ({ icon, label, isOpen, active }) => (
+    <button className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${active ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'} ${isOpen ? 'justify-start' : 'justify-center'}`}>
+        {icon}
+        {isOpen && <span className="font-medium text-sm">{label}</span>}
+    </button>
+);
 
 export default MainLayout;
