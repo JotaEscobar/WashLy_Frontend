@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle } from 'lucide-react';
+import { Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle, Lock, Ban } from 'lucide-react';
 import api from '../api/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 
@@ -22,26 +22,61 @@ const Tickets = () => {
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [modalLoading, setModalLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
+    const [successMsg, setSuccessMsg] = useState('');
     
     // Acciones Modal
     const [newStatus, setNewStatus] = useState('');
     const [statusComment, setStatusComment] = useState('');
     const [cancelReason, setCancelReason] = useState('');
-    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    const [showCancelOptions, setShowCancelOptions] = useState(false);
     
     // Pago Rápido
     const [showPayModal, setShowPayModal] = useState(false);
     const [payAmount, setPayAmount] = useState('');
     const [payMethod, setPayMethod] = useState('EFECTIVO');
 
-    // Confirmación Personalizada (La "Ventanita")
-    const [confirmModal, setConfirmModal] = useState({ show: false, message: '', action: null, type: 'info' });
+    // Sistema de Modales (Confirmación y Alertas)
+    const [modalConfig, setModalConfig] = useState({ 
+        show: false, 
+        title: '', 
+        message: '', 
+        action: null,
+        type: 'info', 
+        confirmText: 'Confirmar'
+    });
 
     const navigate = useNavigate();
 
+    // --- HELPERS PARA MODALES ---
+    const showAlert = (title, message, type = 'error') => {
+        setModalConfig({
+            show: true,
+            title,
+            message,
+            type,
+            action: null,
+            confirmText: 'Entendido'
+        });
+    };
+
+    const showConfirm = (title, message, action, type = 'warning', confirmText = 'Confirmar') => {
+        setModalConfig({
+            show: true,
+            title,
+            message,
+            action,
+            type,
+            confirmText
+        });
+    };
+
+    const closeModal = () => {
+        setModalConfig({ ...modalConfig, show: false });
+    };
+
     // --- CARGA DE DATOS ---
     const fetchTickets = async (url = null) => {
-        setLoading(true);
+        if(!url && !tickets.length) setLoading(true); 
         try {
             let endpoint = url;
             if (!endpoint) {
@@ -124,65 +159,57 @@ const Tickets = () => {
     const handleViewDetails = async (id) => {
         setModalLoading(true);
         setSelectedTicket(null);
-        setShowCancelConfirm(false);
+        setShowCancelOptions(false);
         setShowPayModal(false);
-        setConfirmModal({ show: false, message: '', action: null });
+        setSuccessMsg('');
+        setModalConfig({ ...modalConfig, show: false });
         try {
             const response = await api.get(`tickets/${id}/`);
             setSelectedTicket(response.data);
             setNewStatus(response.data.estado);
             setStatusComment('');
         } catch (error) {
-            alert("Error al cargar detalles");
+            showAlert('Error', 'No se pudieron cargar los detalles del ticket.');
         } finally {
             setModalLoading(false);
         }
     };
 
-    // Función INTERNA para ejecutar el cambio de estado (llamada tras confirmar)
     const executeStatusUpdate = async () => {
         setActionLoading(true);
-        setConfirmModal({ ...confirmModal, show: false }); // Cerrar ventanita de confirmación
+        closeModal();
         try {
-            const response = await api.post(`tickets/${selectedTicket.id}/update_estado/`, {
+            await api.post(`tickets/${selectedTicket.id}/update_estado/`, {
                 estado: newStatus,
                 comentario: statusComment || "Actualización rápida"
             });
-            
-            // 1. Actualizar datos en el modal sin cerrarlo
-            if (response.data && response.data.ticket) {
-                setSelectedTicket(response.data.ticket);
-                setNewStatus(response.data.ticket.estado); // Sincronizar select
-            } else {
-                handleViewDetails(selectedTicket.id); // Fallback recarga
-            }
-            
-            // 2. Refrescar tabla de fondo
-            fetchTickets();
-            
+            setSuccessMsg('Estado actualizado');
+            setTimeout(() => {
+                setSuccessMsg(''); 
+                handleViewDetails(selectedTicket.id); 
+                fetchTickets(); 
+            }, 1000); 
         } catch (error) {
             const msg = error.response?.data?.non_field_errors?.[0] || error.response?.data?.error || "Error al actualizar estado";
-            alert(`⚠️ ${msg}`);
+            showAlert('Error al Actualizar', msg);
         } finally {
             setActionLoading(false);
         }
     };
 
-    // Handler para el botón "Guardar"
     const onSaveStatusClick = () => {
         if (!selectedTicket || newStatus === selectedTicket.estado) return;
-        setConfirmModal({
-            show: true,
-            message: `¿Estás seguro de cambiar el estado a "${newStatus}"?`,
-            action: executeStatusUpdate,
-            type: 'warning'
-        });
+        if (newStatus === 'ENTREGADO' && selectedTicket.saldo_pendiente > 0) {
+            showAlert('Restricción de Entrega', `Saldo pendiente: S/ ${selectedTicket.saldo_pendiente.toFixed(2)}. Debe saldar la cuenta.`, 'error');
+            setNewStatus(selectedTicket.estado);
+            return;
+        }
+        showConfirm('Confirmar Cambio', `¿Cambiar estado a "${newStatus}"?`, executeStatusUpdate, 'warning');
     };
 
-    // Función INTERNA para ejecutar pago (llamada tras confirmar)
     const executePayment = async () => {
         setActionLoading(true);
-        setConfirmModal({ ...confirmModal, show: false });
+        closeModal();
         try {
             await api.post('pagos/', {
                 ticket: selectedTicket.id,
@@ -191,50 +218,53 @@ const Tickets = () => {
                 estado: 'PAGADO',
                 origen: 'TICKETS'
             });
-            
             setShowPayModal(false);
             setPayAmount('');
-            // Recargar datos modal y tabla
-            handleViewDetails(selectedTicket.id); 
-            fetchTickets(); 
+            setSuccessMsg('Pago registrado');
+            setTimeout(() => {
+                setSuccessMsg('');
+                handleViewDetails(selectedTicket.id);
+                fetchTickets(); 
+            }, 1000);
         } catch (error) {
-            console.error(error);
-            alert("❌ Error al registrar pago");
+            showAlert('Error', 'No se pudo registrar el pago.');
         } finally {
             setActionLoading(false);
         }
     };
 
-    // Handler para el botón "Confirmar Pago"
     const onRegisterPaymentClick = () => {
-        if (!payAmount || parseFloat(payAmount) <= 0) return alert("Monto inválido");
-        setConfirmModal({
-            show: true,
-            message: `¿Registrar pago de S/ ${parseFloat(payAmount).toFixed(2)} con ${payMethod}?`,
-            action: executePayment,
-            type: 'money'
-        });
+        if (!payAmount || parseFloat(payAmount) <= 0) return showAlert('Monto Inválido', 'Ingrese un monto mayor a 0.', 'warning');
+        showConfirm('Confirmar Pago', `¿Pagar S/ ${parseFloat(payAmount).toFixed(2)} con ${payMethod}?`, executePayment, 'money');
     };
 
-    const handleCancelTicket = async () => {
-        if (!cancelReason.trim()) return alert("⚠️ Motivo obligatorio.");
+    const executeCancelTicket = async () => {
         setActionLoading(true);
+        closeModal();
         try {
             await api.post(`tickets/${selectedTicket.id}/cancelar/`, { motivo: cancelReason });
-            setSelectedTicket(null); // Aquí si cerramos porque se canceló
-            fetchTickets();
+            setSuccessMsg('Ticket cancelado');
+            setTimeout(() => {
+                setSuccessMsg('');
+                setSelectedTicket(null); 
+                fetchTickets(); 
+            }, 1000);
         } catch (error) {
-            alert("❌ Error: " + (error.response?.data?.error || "Desconocido"));
+            showAlert('Error', error.response?.data?.error || "Error al cancelar.");
         } finally {
             setActionLoading(false);
         }
+    };
+
+    const onConfirmCancelClick = () => {
+        if (!cancelReason.trim()) return showAlert('Motivo Obligatorio', 'Ingrese un motivo.', 'warning');
+        showConfirm('¿Cancelar Ticket?', 'Esta acción anulará el servicio. ¿Está seguro?', executeCancelTicket, 'danger');
     };
 
     const handleReprintTicket = () => {
         if (!selectedTicket) return;
         const ticketWindow = window.open('', '_blank', 'width=400,height=600');
         const qrUrl = selectedTicket.qr_code_url || selectedTicket.qr_code;
-
         const html = `
             <html>
             <head>
@@ -253,6 +283,9 @@ const Tickets = () => {
                     .qr-container { margin-top: 20px; display: flex; flex-direction: column; align-items: center; }
                     img { width: 120px; height: 120px; }
                     .watermark { font-size: 14px; font-weight: bold; border: 2px solid #000; padding: 5px; margin-top: 10px; display: inline-block;}
+                    .qr-text { font-size: 10px; margin-top: 5px; font-weight: bold; }
+                    .qr-subtext { font-size: 10px; margin-top: 2px; }
+                    .footer-system { margin-top: 20px; font-size: 9px; color: #666; border-top: 1px solid #ddd; padding-top: 5px; }
                 </style>
             </head>
             <body>
@@ -279,11 +312,16 @@ const Tickets = () => {
                     <div class="sub-row"><span>Saldo:</span><span>S/ ${selectedTicket.saldo_pendiente.toFixed(2)}</span></div>
                 </div>
                 ${selectedTicket.saldo_pendiente <= 0 ? '<div class="watermark">¡PAGADO!</div>' : ''}
-                <div class="qr-container">${qrUrl ? `<img src="${qrUrl}" />` : ''}</div>
+                <div class="qr-container">
+                    ${qrUrl ? `<img src="${qrUrl}" />` : ''}
+                    <div class="qr-text">Escanear para ver estado</div>
+                    <div class="qr-subtext">¡Gracias por su preferencia!</div>
+                    <div class="qr-subtext">Conserve este ticket para el recojo.</div>
+                </div>
+                <div class="footer-system">Sistema Washly v1.0</div>
             </body>
             </html>
         `;
-
         ticketWindow.document.write(html);
         ticketWindow.document.close();
         setTimeout(() => { ticketWindow.focus(); ticketWindow.print(); }, 800);
@@ -296,7 +334,7 @@ const Tickets = () => {
 
     return (
         <div className="p-6 h-full flex flex-col text-gray-800 dark:text-gray-100 relative">
-            {/* ... (Header y Filtros sin cambios) ... */}
+            {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-black tracking-tight">Gestión de Tickets</h1>
@@ -307,6 +345,7 @@ const Tickets = () => {
                 </button>
             </div>
 
+            {/* Filtros */}
             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-6 flex flex-col md:flex-row gap-4 items-center">
                 <div className="relative flex-1 w-full">
                     <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
@@ -323,9 +362,11 @@ const Tickets = () => {
                     <option value="EN_PROCESO">En Proceso</option>
                     <option value="LISTO">Listo</option>
                     <option value="ENTREGADO">Entregado</option>
+                    <option value="CANCELADO">Cancelado</option>
                 </select>
             </div>
 
+            {/* Tabla */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex-1 flex flex-col">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -373,8 +414,6 @@ const Tickets = () => {
                         </tbody>
                     </table>
                 </div>
-                
-                {/* Footer Paginación */}
                 <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                     <button disabled={!prevPage} onClick={() => fetchTickets(prevPage)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!prevPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}><ChevronLeft size={16}/> Anterior</button>
                     <span className="text-xs text-gray-500">Navegación de Registros</span>
@@ -387,6 +426,42 @@ const Tickets = () => {
                 <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm fixed top-0 left-0 w-full h-full">
                     <div className="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700 relative">
                         
+                        {/* ALERTAS Y CONFIRMACIONES */}
+                        {modalConfig.show && (
+                            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl animate-in fade-in p-4">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-sm w-full text-center">
+                                    <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                                        modalConfig.type === 'money' ? 'bg-emerald-100 text-emerald-600' : 
+                                        ['danger', 'error'].includes(modalConfig.type) ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
+                                    }`}>
+                                        {modalConfig.type === 'money' ? <DollarSign size={24}/> : 
+                                         ['danger', 'error'].includes(modalConfig.type) ? <AlertCircle size={24}/> : <AlertTriangle size={24}/>}
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{modalConfig.title}</h3>
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{modalConfig.message}</p>
+                                    <div className="flex gap-3">
+                                        {modalConfig.action && (
+                                            <button onClick={closeModal} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-sm transition-colors">Cancelar</button>
+                                        )}
+                                        <button onClick={modalConfig.action || closeModal} className={`flex-1 px-4 py-2 text-white rounded-xl font-bold text-sm shadow-lg transition-transform active:scale-95 ${
+                                            modalConfig.type === 'money' ? 'bg-emerald-600 hover:bg-emerald-700' : 
+                                            ['danger', 'error'].includes(modalConfig.type) ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                                        }`}>
+                                            {modalConfig.confirmText}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* MENSAJE FLOTANTE DE ÉXITO (Toast) */}
+                        {successMsg && (
+                            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[70] bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in fade-in zoom-in slide-in-from-bottom-4">
+                                <div className="bg-green-500 rounded-full p-1"><CheckCircle size={14} className="text-white"/></div>
+                                <span className="font-bold text-sm">{successMsg}</span>
+                            </div>
+                        )}
+
                         {/* Header Modal */}
                         <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start bg-gray-50 dark:bg-gray-900/50">
                             <div>
@@ -400,87 +475,54 @@ const Tickets = () => {
                                 </div>
                                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
                                     <span className="flex items-center gap-1"><Clock size={14}/> Entrega: {new Date(selectedTicket.fecha_prometida).toLocaleString()}</span>
-                                    {selectedTicket.tipo_entrega && <span className="flex items-center gap-1"><MapPin size={14}/> {selectedTicket.tipo_entrega}</span>}
                                 </div>
                             </div>
                             <button onClick={() => setSelectedTicket(null)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
                         </div>
 
                         <div className="p-6 overflow-y-auto flex-1 space-y-6 relative">
-                            
-                            {/* --- VENTANITA DE CONFIRMACIÓN (Overlay interno) --- */}
-                            {confirmModal.show && (
-                                <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 dark:bg-gray-800/90 backdrop-blur-[2px] rounded-xl animate-in fade-in">
-                                    <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-sm w-full text-center transform transition-all scale-100">
-                                        <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${confirmModal.type === 'money' ? 'bg-emerald-100 text-emerald-600' : 'bg-yellow-100 text-yellow-600'}`}>
-                                            {confirmModal.type === 'money' ? <DollarSign size={24}/> : <AlertCircle size={24}/>}
-                                        </div>
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Confirmación</h3>
-                                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{confirmModal.message}</p>
-                                        <div className="flex gap-3">
-                                            <button 
-                                                onClick={() => setConfirmModal({...confirmModal, show: false})} 
-                                                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-sm transition-colors"
-                                            >
-                                                Cancelar
-                                            </button>
-                                            <button 
-                                                onClick={confirmModal.action}
-                                                className={`flex-1 px-4 py-2 text-white rounded-xl font-bold text-sm shadow-lg transition-transform active:scale-95 ${confirmModal.type === 'money' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'}`}
-                                            >
-                                                Confirmar
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50 relative">
                                     <h3 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-3 flex items-center gap-2">Gestión de Estado</h3>
                                     
-                                    {/* --- BOTÓN CANCELAR (Corregido: Más arriba y a la derecha) --- */}
                                     {selectedTicket.estado !== 'CANCELADO' && selectedTicket.estado !== 'ENTREGADO' && (
-                                        <button 
-                                            onClick={() => setShowCancelConfirm(!showCancelConfirm)}
-                                            className="absolute -top-2 right-0 flex items-center justify-center bg-white dark:bg-gray-800 text-red-500 border border-red-100 dark:border-red-900/30 rounded-full p-2 hover:pr-4 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-300 group shadow-sm z-10"
-                                            title="Cancelar Ticket"
-                                        >
+                                        <button onClick={() => setShowCancelOptions(!showCancelOptions)} className="absolute -top-2 right-0 flex items-center justify-center bg-white dark:bg-gray-800 text-red-500 border border-red-100 dark:border-red-900/30 rounded-full p-2 hover:pr-4 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-300 group shadow-sm z-10">
                                             <Trash2 size={16} />
-                                            <span className="max-w-0 overflow-hidden group-hover:max-w-[100px] group-hover:ml-2 transition-all duration-300 text-xs font-bold whitespace-nowrap">
-                                                Cancelar Ticket
-                                            </span>
+                                            <span className="max-w-0 overflow-hidden group-hover:max-w-[100px] group-hover:ml-2 transition-all duration-300 text-xs font-bold whitespace-nowrap">Cancelar Ticket</span>
                                         </button>
                                     )}
 
-                                    {!showCancelConfirm ? (
-                                        <>
-                                            <div className="flex gap-2 mb-2">
-                                                <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} className="flex-1 p-2 rounded-lg border text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white outline-none">
-                                                    <option value="RECIBIDO">Recibido</option>
-                                                    <option value="EN_PROCESO">En Proceso</option>
-                                                    <option value="LISTO">Listo</option>
-                                                    <option value="ENTREGADO">Entregado</option>
-                                                </select>
-                                                <button 
-                                                    onClick={onSaveStatusClick} 
-                                                    disabled={newStatus === selectedTicket.estado || actionLoading} 
-                                                    className={`px-3 rounded-lg font-bold text-white text-xs ${newStatus === selectedTicket.estado || actionLoading ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}`}
-                                                >
-                                                    {actionLoading ? '...' : 'Guardar'}
-                                                </button>
-                                            </div>
-                                            <input type="text" placeholder="Comentario..." value={statusComment} onChange={(e) => setStatusComment(e.target.value)} className="w-full p-2 text-xs border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
-                                        </>
-                                    ) : (
-                                        <div className="mt-2 animate-in fade-in">
-                                            <p className="text-xs font-bold text-red-600 mb-1">Motivo de cancelación:</p>
-                                            <input type="text" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className="w-full p-2 text-xs border border-red-300 rounded mb-2 dark:bg-gray-700 dark:text-white" autoFocus/>
-                                            <div className="flex gap-2">
-                                                <button onClick={handleCancelTicket} disabled={actionLoading} className="flex-1 bg-red-600 text-white text-xs py-1.5 rounded font-bold hover:bg-red-700">Confirmar</button>
-                                                <button onClick={() => setShowCancelConfirm(false)} className="px-2 text-gray-500 text-xs hover:underline">Atrás</button>
-                                            </div>
+                                    {['ENTREGADO', 'CANCELADO'].includes(selectedTicket.estado) ? (
+                                        <div className={`flex items-center gap-2 p-3 rounded-lg border dark:border-gray-700 ${selectedTicket.estado === 'CANCELADO' ? 'text-red-600 bg-red-100 dark:bg-red-900/30 border-red-200' : 'text-gray-500 bg-gray-100 dark:bg-gray-800 border-gray-200'}`}>
+                                            {selectedTicket.estado === 'CANCELADO' ? <Ban size={18} /> : <Lock size={18} />}
+                                            <span className="text-xs font-bold">{selectedTicket.estado === 'CANCELADO' ? 'TICKET ANULADO - Operación bloqueada' : 'TICKET FINALIZADO (Entregado)'}</span>
                                         </div>
+                                    ) : (
+                                        !showCancelOptions ? (
+                                            <>
+                                                <div className="flex gap-2 mb-2">
+                                                    <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} className="flex-1 p-2 rounded-lg border text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white outline-none">
+                                                        <option value="RECIBIDO">Recibido</option>
+                                                        <option value="EN_PROCESO">En Proceso</option>
+                                                        <option value="LISTO">Listo</option>
+                                                        <option value="ENTREGADO">Entregado</option>
+                                                    </select>
+                                                    <button onClick={onSaveStatusClick} disabled={newStatus === selectedTicket.estado || actionLoading} className={`px-3 rounded-lg font-bold text-white text-xs ${newStatus === selectedTicket.estado || actionLoading ? 'bg-gray-300 dark:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                                        {actionLoading ? '...' : 'Guardar'}
+                                                    </button>
+                                                </div>
+                                                <input type="text" placeholder="Comentario..." value={statusComment} onChange={(e) => setStatusComment(e.target.value)} className="w-full p-2 text-xs border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
+                                            </>
+                                        ) : (
+                                            <div className="mt-2 animate-in fade-in">
+                                                <p className="text-xs font-bold text-red-600 mb-1">Motivo de cancelación:</p>
+                                                <input type="text" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className="w-full p-2 text-xs border border-red-300 rounded mb-2 dark:bg-gray-700 dark:text-white" autoFocus/>
+                                                <div className="flex gap-2">
+                                                    <button onClick={onConfirmCancelClick} disabled={actionLoading} className="flex-1 bg-red-600 text-white text-xs py-1.5 rounded font-bold hover:bg-red-700">Confirmar</button>
+                                                    <button onClick={() => setShowCancelOptions(false)} className="px-2 text-gray-500 text-xs hover:underline">Atrás</button>
+                                                </div>
+                                            </div>
+                                        )
                                     )}
                                 </div>
 
@@ -496,7 +538,7 @@ const Tickets = () => {
                                             <p className={`text-xl font-black ${selectedTicket.saldo_pendiente > 0 ? 'text-red-600' : 'text-emerald-500'}`}>S/ {selectedTicket.saldo_pendiente.toFixed(2)}</p>
                                         </div>
                                     </div>
-                                    {selectedTicket.saldo_pendiente > 0 && !showPayModal && (
+                                    {selectedTicket.saldo_pendiente > 0 && !showPayModal && selectedTicket.estado !== 'CANCELADO' && (
                                         <button onClick={() => {setShowPayModal(true); setPayAmount(selectedTicket.saldo_pendiente);}} className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded-lg text-xs font-bold flex justify-center gap-2 items-center shadow-sm">
                                             <DollarSign size={14}/> Registrar Pago
                                         </button>
@@ -539,10 +581,7 @@ const Tickets = () => {
                             </div>
 
                             <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-center">
-                                <button 
-                                    onClick={handleReprintTicket}
-                                    className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-6 py-2 rounded-xl transition-colors font-bold border border-gray-200 dark:border-gray-600"
-                                >
+                                <button onClick={handleReprintTicket} className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-6 py-2 rounded-xl transition-colors font-bold border border-gray-200 dark:border-gray-600">
                                     <Printer size={18}/> Ver / Reimprimir Ticket
                                 </button>
                             </div>
