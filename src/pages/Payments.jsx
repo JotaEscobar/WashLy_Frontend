@@ -17,6 +17,8 @@ const Payments = () => {
     const [statusFilter, setStatusFilter] = useState('TODOS'); // TODOS, PENDIENTE, PAGADO
     const [fechaDesde, setFechaDesde] = useState('');
     const [fechaHasta, setFechaHasta] = useState('');
+  
+    const [infoModal, setInfoModal] = useState({ show: false, title: '', message: '', type: 'info' });
     
     const [nextUrl, setNextUrl] = useState(null);
     const [prevUrl, setPrevUrl] = useState(null);
@@ -120,9 +122,12 @@ const Payments = () => {
         } catch (e) { alert("Error al cerrar"); }
     };
 
-    // --- ACCIONES DE PAGO ---
     const handleRegisterPayment = async () => {
-        if (!payAmount || parseFloat(payAmount) <= 0) return alert("Monto inválido");
+        if (!payAmount || parseFloat(payAmount) <= 0) {
+            setInfoModal({ show: true, title: 'Monto Inválido', message: 'Ingrese un monto mayor a 0', type: 'error' });
+            return;
+        }
+        
         try {
             await api.post('pagos/', {
                 ticket: selectedTicket.id,
@@ -130,11 +135,26 @@ const Payments = () => {
                 metodo_pago: payMethod,
                 estado: 'PAGADO'
             });
+            
             setShowPayModal(false);
             setPayAmount('');
+            
+            // Feedback con Modal en lugar de Alert
+            setInfoModal({ 
+                show: true, 
+                title: 'Pago Exitoso', 
+                message: 'El pago ha sido registrado en caja correctamente.', 
+                type: 'success' 
+            });
+            
             fetchCaja(); 
             fetchTableData(); 
-        } catch (e) { alert(e.response?.data?.error || "Error al pagar"); }
+            
+        } catch (error) {
+            const msg = error.response?.data?.error || "Error al realizar el pago";
+            // Feedback de Error con Modal
+            setInfoModal({ show: true, title: 'Error de Pago', message: msg, type: 'error' });
+        }
     };
 
     const confirmExtorno = (ticket) => {
@@ -452,6 +472,28 @@ const Payments = () => {
                         </div>
                         <button onClick={handleRegisterPayment} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold">Cobrar</button>
                         <button onClick={()=>setShowPayModal(false)} className="w-full mt-2 text-gray-500 text-sm">Cancelar</button>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL INFORMATIVO GENÉRICO (Reemplazo de Alerts) */}
+            {infoModal.show && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl text-center border border-gray-100 dark:border-gray-700">
+                        <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                            infoModal.type === 'error' ? 'bg-red-100 text-red-500' : 
+                            infoModal.type === 'success' ? 'bg-emerald-100 text-emerald-500' : 'bg-blue-100 text-blue-500'
+                        }`}>
+                            {infoModal.type === 'error' ? <AlertTriangle size={24}/> : <CheckCircle size={24}/>}
+                        </div>
+                        <h3 className="text-lg font-bold mb-2 dark:text-white">{infoModal.title}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{infoModal.message}</p>
+                        <button 
+                            onClick={() => setInfoModal({ ...infoModal, show: false })} 
+                            className="w-full bg-gray-900 hover:bg-black dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 text-white py-2.5 rounded-xl font-bold transition-colors"
+                        >
+                            Entendido
+                        </button>
                     </div>
                 </div>
             )}

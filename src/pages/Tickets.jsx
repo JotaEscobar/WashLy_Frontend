@@ -209,8 +209,9 @@ const Tickets = () => {
 
     const executePayment = async () => {
         setActionLoading(true);
-        closeModal();
+        
         try {
+            // 1. Petición al Backend (Ruta corregida a 'pagos/')
             await api.post('pagos/', {
                 ticket: selectedTicket.id,
                 monto: parseFloat(payAmount),
@@ -218,20 +219,42 @@ const Tickets = () => {
                 estado: 'PAGADO',
                 origen: 'TICKETS'
             });
-            setShowPayModal(false);
+
+            // 2. Éxito: Cerrar modales y mostrar Toast
+            setShowPayModal(false);     // Cierra el modal de ingreso de monto
             setPayAmount('');
-            setSuccessMsg('Pago registrado');
+            
+            // Cerramos el modal de confirmación
+            setModalConfig({ ...modalConfig, show: false });
+            
+            // Mostramos el mensaje flotante de éxito (Toast ya implementado en tu JSX)
+            setSuccessMsg('Pago registrado correctamente');
+
+            // 3. Recargar datos
             setTimeout(() => {
-                setSuccessMsg('');
-                handleViewDetails(selectedTicket.id);
-                fetchTickets(); 
-            }, 1000);
+                setSuccessMsg(''); // Limpiar mensaje
+                handleViewDetails(selectedTicket.id); // Recargar detalle ticket
+                fetchTickets(); // Recargar tabla
+            }, 1500);
+
         } catch (error) {
-            showAlert('Error', 'No se pudo registrar el pago.');
+            console.error(error);
+            const serverError = error.response?.data?.error || error.response?.data?.detail || "No se pudo procesar el pago.";
+            
+            // 3. Error: Reutilizamos el Modal para mostrar el error (Feedback visual profesional)
+            setModalConfig({ 
+                show: true, 
+                title: 'No se pudo pagar', 
+                message: serverError, // Ej: "No tienes una caja abierta"
+                type: 'error', 
+                confirmText: 'Entendido',
+                action: null // Al ser null, el botón cerrará el modal
+            });
         } finally {
             setActionLoading(false);
         }
     };
+
 
     const onRegisterPaymentClick = () => {
         if (!payAmount || parseFloat(payAmount) <= 0) return showAlert('Monto Inválido', 'Ingrese un monto mayor a 0.', 'warning');
