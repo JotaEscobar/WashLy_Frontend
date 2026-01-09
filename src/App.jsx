@@ -24,7 +24,7 @@ function App() {
                     <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                         <Route path="/pos" element={<POS />} />
                         <Route path="/tickets" element={<Tickets />} />
-                        <Route path="/pagos" element={<Payments />} /> {/* <--- 2. USAR COMPONENTE */}
+                        <Route path="/pagos" element={<Payments />} /> 
                         <Route path="/dashboard" element={<div className="text-2xl font-bold p-6">Bienvenido al Dashboard</div>} />
                         
                         {/* Rutas placeholder */}
