@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { 
     Wallet, Search, ArrowUpRight, ArrowDownLeft, 
     DollarSign, CreditCard, Lock, RotateCcw, 
-    RefreshCw, X, Clock, FileText, Calendar, User, Eye, AlertTriangle
+    RefreshCw, X, Clock, FileText, Calendar, User, Eye, AlertTriangle,
+    CheckCircle // <--- IMPORT FALTANTE AGREGADO
 } from 'lucide-react';
 import api from '../api/axiosConfig';
 
@@ -97,6 +98,23 @@ const Payments = () => {
         } catch (e) { alert(e.response?.data?.error || "Error al abrir"); }
     };
 
+    // --- NUEVA FUNCIÓN: AUTOCOMPLETAR ---
+    const handleAutoFillCierre = (e) => {
+        if (e.target.checked && caja?.desglose_pagos) {
+            setCierreDetalle(prev => ({
+                ...prev,
+                EFECTIVO: caja.desglose_pagos.EFECTIVO || 0,
+                YAPE: caja.desglose_pagos.YAPE || 0,
+                PLIN: caja.desglose_pagos.PLIN || 0,
+                TARJETA: caja.desglose_pagos.TARJETA || 0,
+                TRANSFERENCIA: caja.desglose_pagos.TRANSFERENCIA || 0
+            }));
+        } else {
+            // Opcional: Limpiar si se desmarca, o dejarlo como está.
+            // Aquí lo dejaremos con los valores actuales para permitir edición manual posterior.
+        }
+    };
+
     const handleCerrar = async () => {
         const totalReal = Object.keys(cierreDetalle)
             .filter(k => k !== 'comentarios')
@@ -119,7 +137,10 @@ const Payments = () => {
             setShowCerrar(false);
             setTickets([]);
             setCierreDetalle({EFECTIVO: '', YAPE: '', PLIN: '', TARJETA: '', comentarios: ''});
-        } catch (e) { alert("Error al cerrar"); }
+        } catch (e) { 
+            console.error(e);
+            alert("Error al cerrar: " + (e.response?.data?.error || "Error interno")); 
+        }
     };
 
     const handleRegisterPayment = async () => {
@@ -166,7 +187,9 @@ const Payments = () => {
         try {
             const res = await api.get(`pagos/?search=${selectedTicket.numero_ticket}`);
             const pagos = res.data.results || res.data;
-            const hoy = new Date().toISOString().split('T')[0];
+            
+            // Usar fecha local YYYY-MM-DD para evitar errores de timezone con toISOString()
+            const hoy = new Date().toLocaleDateString('en-CA'); 
             const pagoExtornable = pagos.find(p => p.estado === 'PAGADO' && p.fecha_pago.startsWith(hoy));
 
             if (!pagoExtornable) {
@@ -174,11 +197,24 @@ const Payments = () => {
                 return alert("No hay pago válido de HOY para extornar.");
             }
 
-            await api.post(`pagos/lista/${pagoExtornable.id}/anular/`);
+            // CORRECCIÓN URL: Quitamos '/lista' que estaba sobrando
+            await api.post(`pagos/${pagoExtornable.id}/anular/`);
+            
             setShowExtornoModal(false);
+            
+            setInfoModal({ 
+                show: true, 
+                title: 'Extorno Exitoso', 
+                message: 'El dinero ha retornado al ticket y se descontó de caja.', 
+                type: 'success' 
+            });
+
             fetchCaja();
             fetchTableData();
-        } catch (e) { alert("Error al extornar"); }
+        } catch (e) { 
+            console.error(e);
+            alert("Error al extornar: " + (e.response?.data?.error || "Error de conexión")); 
+        }
     };
 
     // --- HISTORIAL ---
@@ -517,7 +553,15 @@ const Payments = () => {
             {showCerrar && (
                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-lg shadow-2xl">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Lock size={20}/> Cierre y Cuadre de Caja</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold flex items-center gap-2"><Lock size={20}/> Cierre y Cuadre de Caja</h3>
+                            
+                            {/* CHECKBOX AUTOCOMPLETAR */}
+                            <label className="flex items-center gap-2 text-sm text-blue-600 font-bold cursor-pointer hover:text-blue-700">
+                                <input type="checkbox" onChange={handleAutoFillCierre} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
+                                Cuadrar Perfecto (Copiar Sistema)
+                            </label>
+                        </div>
                         
                         <div className="overflow-hidden border rounded-xl mb-4 dark:border-gray-700">
                             <table className="w-full text-sm">
