@@ -3,7 +3,7 @@ import {
     Wallet, Search, ArrowUpRight, ArrowDownLeft, 
     DollarSign, CreditCard, Lock, RotateCcw, 
     RefreshCw, X, Clock, FileText, Calendar, User, Eye, AlertTriangle,
-    CheckCircle, Unlock, ArrowDownCircle, AlertCircle, PlusCircle, MinusCircle
+    CheckCircle, Unlock, ArrowDownCircle, AlertCircle, PlusCircle, MinusCircle, BookOpen
 } from 'lucide-react';
 import api from '../api/axiosConfig';
 
@@ -48,17 +48,15 @@ const Payments = () => {
         showCancel: false
     });
 
-    // Modales Historial y Diario
-    const [showSessionsModal, setShowSessionsModal] = useState(false);
-    const [loadingHistory, setLoadingHistory] = useState(false);
-    const [historyFilters, setHistoryFilters] = useState({ desde: '', hasta: '' }); // Filtro fechas historial
+    // --- MODAL DIARIO ELECTRONICO (HISTORIAL) ---
+    const [showDiarioModal, setShowDiarioModal] = useState(false);
+    const [loadingDiario, setLoadingDiario] = useState(false);
+    // Filtro por defecto: HOY
+    const today = new Date().toISOString().split('T')[0];
+    const [diarioFilters, setDiarioFilters] = useState({ desde: today, hasta: today });
+    const [diarioEvents, setDiarioEvents] = useState([]);
     
-    const [showTimelineModal, setShowTimelineModal] = useState(false);
-    const [sessionsList, setSessionsList] = useState([]);
-    const [selectedSessionTimeline, setSelectedSessionTimeline] = useState([]);
-    const [selectedSessionInfo, setSelectedSessionInfo] = useState(null);
-    
-    // Nuevo: Modal Detalle (Ojo)
+    // Modal Detalle (Ojo)
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [detailContent, setDetailContent] = useState(null);
 
@@ -262,7 +260,9 @@ const Payments = () => {
             setShowMovimientoModal(false);
             setMovimientoForm({ tipo: 'EGRESO', categoria: 'OTROS', monto: '', metodo_pago: 'EFECTIVO', descripcion: '' });
             showModal("Registrado", "Movimiento registrado correctamente en caja.", "success");
-            fetchCaja(); // Actualizar scorecards
+            fetchCaja(); 
+            // Si el diario está abierto, actualizarlo también
+            if (showDiarioModal) fetchDiario();
         } catch (e) {
             showModal("Error", e.response?.data?.error || "Error al registrar movimiento", "error");
         }
@@ -289,6 +289,7 @@ const Payments = () => {
             
             fetchCaja(); 
             fetchTableData(); 
+            if (showDiarioModal) fetchDiario();
             
         } catch (error) {
             showModal("Error de Pago", error.response?.data?.error || "Error al realizar el pago", "error");
@@ -311,6 +312,7 @@ const Payments = () => {
 
             fetchCaja();
             fetchTableData();
+            if (showDiarioModal) fetchDiario();
         } catch (e) { 
             showModal("Error", "Error al extornar: " + (e.response?.data?.error || "Error de conexión"), "error");
         }
@@ -326,40 +328,32 @@ const Payments = () => {
         );
     };
 
-    // --- HISTORIAL (DIARIOS) ---
-    const fetchSessionsHistory = async () => {
-        setLoadingHistory(true);
-        setSessionsList([]);
+    // --- DIARIO ELECTRONICO (Historial) ---
+    const fetchDiario = async () => {
+        setLoadingDiario(true);
+        setDiarioEvents([]);
         try {
             const params = new URLSearchParams();
-            if (historyFilters.desde) params.append('fecha_desde', historyFilters.desde);
-            if (historyFilters.hasta) params.append('fecha_hasta', historyFilters.hasta);
+            if (diarioFilters.desde) params.append('fecha_desde', diarioFilters.desde);
+            if (diarioFilters.hasta) params.append('fecha_hasta', diarioFilters.hasta);
             
-            const res = await api.get(`pagos/caja/?${params.toString()}`);
-            setSessionsList(res.data.results || res.data);
+            // Llamamos al nuevo endpoint que consolida movimientos por fecha
+            const res = await api.get(`pagos/caja/diario/?${params.toString()}`);
+            setDiarioEvents(res.data);
         } catch (e) { 
-            console.error("Error historial:", e);
+            console.error("Error historial diario:", e);
         } finally {
-            setLoadingHistory(false);
+            setLoadingDiario(false);
         }
     };
 
-    const openSessionsHistory = () => {
-        setShowSessionsModal(true);
-        fetchSessionsHistory();
-    };
-
-    const openSessionTimeline = async (session) => {
-        setSelectedSessionInfo(session);
-        setShowTimelineModal(true);
-        setSelectedSessionTimeline([]); 
-        try {
-            const res = await api.get(`pagos/caja/${session.id}/timeline/`);
-            setSelectedSessionTimeline(res.data);
-        } catch (e) { console.error(e); }
+    const openDiarioModal = () => {
+        setShowDiarioModal(true);
+        // Si no hay filtros, usar HOY por defecto
+        if (!diarioFilters.desde) setDiarioFilters({ desde: today, hasta: today });
+        fetchDiario();
     };
     
-    // Función para abrir el detalle (ojo)
     const openTransactionDetail = (item) => {
         setDetailContent(item);
         setShowDetailModal(true);
@@ -462,126 +456,107 @@ const Payments = () => {
                     </button>
                     
                     <div className="mt-6 border-t pt-4 dark:border-gray-700 text-center">
-                         <button onClick={openSessionsHistory} className="text-sm text-gray-500 hover:text-emerald-600 hover:underline flex items-center justify-center gap-2 mx-auto">
+                         <button onClick={openDiarioModal} className="text-sm text-gray-500 hover:text-emerald-600 hover:underline flex items-center justify-center gap-2 mx-auto">
                             <Clock size={14}/> Ver Historial de Cajas
                         </button>
                     </div>
                 </div>
 
                 {renderGlobalModal()}
-                {showSessionsModal && renderSessionsModal()}
-                {showTimelineModal && renderTimelineModal()}
+                {showDiarioModal && renderDiarioModal()}
                 {showDetailModal && renderDetailModal()}
             </div>
         );
     }
 
-    // --- RENDER MODALES AUXILIARES ---
-    function renderSessionsModal() {
+    // --- MODAL DIARIO ELECTRONICO UNIFICADO ---
+    function renderDiarioModal() {
         return (
             <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-2xl shadow-2xl h-[80vh] flex flex-col">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-bold flex items-center gap-2"><Clock size={20}/> Seleccionar Día (Sesión)</h3>
-                        <button onClick={() => setShowSessionsModal(false)} className="text-gray-400 hover:text-red-500"><X size={20}/></button>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-5xl shadow-2xl h-[90vh] flex flex-col">
+                    <div className="flex justify-between items-center mb-4 border-b pb-4 dark:border-gray-700">
+                        <div>
+                            <h3 className="text-xl font-bold flex items-center gap-2"><BookOpen size={24}/> Diario Electrónico</h3>
+                            <p className="text-xs text-gray-500 mt-1">Historial detallado de movimientos</p>
+                        </div>
+                        <button onClick={() => setShowDiarioModal(false)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full dark:bg-gray-700"><X size={20}/></button>
                     </div>
                     
                     {/* Filtros de Fecha */}
                     <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl mb-4 flex gap-3 items-center">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Filtrar Periodo:</span>
-                        <input type="date" value={historyFilters.desde} onChange={e=>setHistoryFilters({...historyFilters, desde: e.target.value})} className="p-1.5 border rounded-lg text-xs font-bold dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
+                        <span className="text-xs font-bold text-gray-500 uppercase">Periodo:</span>
+                        <input type="date" value={diarioFilters.desde} onChange={e=>setDiarioFilters({...diarioFilters, desde: e.target.value})} className="p-2 border rounded-lg text-xs font-bold dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
                         <span className="text-gray-400">-</span>
-                        <input type="date" value={historyFilters.hasta} onChange={e=>setHistoryFilters({...historyFilters, hasta: e.target.value})} className="p-1.5 border rounded-lg text-xs font-bold dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
-                        <button onClick={fetchSessionsHistory} className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"><Search size={16}/></button>
+                        <input type="date" value={diarioFilters.hasta} onChange={e=>setDiarioFilters({...diarioFilters, hasta: e.target.value})} className="p-2 border rounded-lg text-xs font-bold dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
+                        <button onClick={fetchDiario} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 flex items-center gap-2"><Search size={14}/> Filtrar</button>
                     </div>
 
-                    <div className="overflow-y-auto flex-1 border rounded-xl dark:border-gray-700 relative">
-                        {loadingHistory && (
+                    <div className="overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-900/50 rounded-xl p-0 border dark:border-gray-700 relative">
+                         {loadingDiario && (
                             <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex items-center justify-center z-10">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
                             </div>
                         )}
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
-                                <tr>
-                                    <th className="p-3">Apertura</th>
-                                    <th className="p-3">Usuario</th>
-                                    <th className="p-3 text-right">Saldo Final</th>
-                                    <th className="p-3 text-center">Ver Diario</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y dark:divide-gray-700">
-                                {sessionsList.map(s => (
-                                    <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                        <td className="p-3 text-xs">{new Date(s.fecha_apertura).toLocaleString()}</td>
-                                        <td className="p-3 font-medium">{s.usuario_nombre || `ID: ${s.usuario}`}</td>
-                                        <td className="p-3 text-right font-bold">S/ {s.saldo_actual?.toFixed(2)}</td>
-                                        <td className="p-3 text-center">
-                                            <button onClick={() => openSessionTimeline(s)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded tooltip" title="Ver Diario"><Eye size={16}/></button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {!loadingHistory && sessionsList.length === 0 && (
-                                    <tr>
-                                        <td colSpan="4" className="p-8 text-center text-gray-400">No hay registros en este periodo.</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    function renderTimelineModal() {
-        if (!selectedSessionInfo) return null;
-        return (
-            <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl h-[90vh] flex flex-col">
-                    <div className="flex justify-between items-start mb-4 border-b pb-4 dark:border-gray-700">
-                        <div>
-                            <h3 className="text-xl font-bold flex items-center gap-2"><FileText size={24}/> Diario Electrónico</h3>
-                            <p className="text-xs text-gray-500 mt-1">
-                                Sesión del: <span className="font-bold text-gray-800 dark:text-gray-200">{new Date(selectedSessionInfo.fecha_apertura).toLocaleString()}</span>
-                            </p>
-                        </div>
-                        <button onClick={() => setShowTimelineModal(false)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full dark:bg-gray-700"><X size={20}/></button>
-                    </div>
-                    <div className="overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border dark:border-gray-700">
+                        
                         <table className="w-full text-sm border-collapse">
-                            <thead>
-                                <tr className="text-gray-400 text-xs uppercase font-bold border-b border-gray-200 dark:border-gray-700">
-                                    <th className="pb-3 text-left">Hora</th>
-                                    <th className="pb-3 text-left">Movimiento</th>
-                                    <th className="pb-3 text-right">Monto</th>
-                                    <th className="pb-3 text-left pl-6">Usuario</th>
-                                    <th className="pb-3 text-center">Detalle</th>
+                            <thead className="bg-white dark:bg-gray-800 sticky top-0 z-10 shadow-sm">
+                                <tr className="text-gray-500 text-xs uppercase font-bold">
+                                    <th className="p-4 text-left w-32">Hora</th>
+                                    <th className="p-4 text-left">Movimiento</th>
+                                    <th className="p-4 text-right w-32">Monto</th>
+                                    <th className="p-4 text-left pl-8 w-40">Usuario</th>
+                                    <th className="p-4 text-center w-24">Detalle</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700/50">
-                                {selectedSessionTimeline.map((ev, idx) => (
-                                    <tr key={idx} className={`hover:bg-white dark:hover:bg-gray-800 ${ev.estado === 'ANULADO' ? 'opacity-50 line-through' : ''}`}>
-                                        <td className="py-3 text-xs font-mono text-gray-500">{new Date(ev.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-                                        <td className="py-3">
-                                            <div className="font-bold text-xs">{ev.tipo_evento}</div>
-                                            <div className="text-xs text-gray-500">{ev.descripcion}</div>
+                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700/50 bg-white dark:bg-gray-800">
+                                {diarioEvents.map((ev, idx) => (
+                                    <tr key={idx} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${ev.estado === 'ANULADO' ? 'opacity-50 line-through' : ''}`}>
+                                        <td className="p-4 text-xs font-mono text-gray-500">
+                                            {/* Mostrar fecha si es distinta a hoy, sino solo hora */}
+                                            {new Date(ev.fecha).toLocaleDateString() === new Date().toLocaleDateString() 
+                                                ? new Date(ev.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
+                                                : new Date(ev.fecha).toLocaleString([], {month:'numeric', day:'numeric', hour: '2-digit', minute:'2-digit'})
+                                            }
                                         </td>
-                                        <td className={`py-3 text-right font-mono font-bold ${ev.es_entrada ? 'text-emerald-600' : 'text-red-600'}`}>
-                                            {ev.es_entrada === null ? '' : (ev.es_entrada ? '+' : '-')} S/ {parseFloat(ev.monto).toFixed(2)}
+                                        
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-2 font-bold text-sm text-gray-800 dark:text-gray-200">
+                                                {ev.tipo_evento === 'VENTA' && <div className="w-2 h-2 rounded-full bg-emerald-500"></div>}
+                                                {ev.tipo_evento === 'EGRESO' && <div className="w-2 h-2 rounded-full bg-red-500"></div>}
+                                                {ev.tipo_evento === 'INGRESO' && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
+                                                {ev.tipo_evento === 'APERTURA' && <div className="w-2 h-2 rounded-full bg-yellow-500"></div>}
+                                                {ev.tipo_evento === 'CIERRE' && <div className="w-2 h-2 rounded-full bg-gray-900"></div>}
+                                                {ev.descripcion}
+                                            </div>
                                         </td>
-                                        <td className="py-3 pl-6 text-xs font-medium">{ev.usuario}</td>
-                                        <td className="py-3 text-center">
+                                        
+                                        <td className={`p-4 text-right font-mono font-bold text-sm ${
+                                            ev.es_entrada === true ? 'text-emerald-600' : 
+                                            ev.es_entrada === false ? 'text-red-600' : 'text-gray-800 dark:text-gray-300'
+                                        }`}>
+                                            {ev.es_entrada !== null ? (ev.es_entrada ? '+' : '-') : ''} S/ {parseFloat(ev.monto).toFixed(2)}
+                                        </td>
+                                        
+                                        <td className="p-4 pl-8 text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">
+                                            {ev.usuario}
+                                        </td>
+                                        
+                                        <td className="p-4 text-center">
                                             <button 
                                                 onClick={() => openTransactionDetail(ev)}
-                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
                                                 title="Ver Detalle"
                                             >
-                                                <Eye size={16}/>
+                                                <Eye size={18}/>
                                             </button>
                                         </td>
                                     </tr>
                                 ))}
+                                {!loadingDiario && diarioEvents.length === 0 && (
+                                    <tr>
+                                        <td colSpan="5" className="p-8 text-center text-gray-400 italic">No hay movimientos registrados en este periodo.</td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -737,7 +712,8 @@ const Payments = () => {
                     <p className="text-gray-500 text-xs">Cajero: <strong>{caja?.usuario_nombre || caja?.usuario}</strong></p>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={openSessionsHistory} className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-50 flex gap-2 items-center shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700">
+                    {/* Botón Historial ahora abre el Diario Unificado */}
+                    <button onClick={openDiarioModal} className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-50 flex gap-2 items-center shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700">
                         <Clock size={16}/> Historial / Diario
                     </button>
                     <button onClick={() => setShowCerrar(true)} className="bg-gray-900 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-black flex gap-2 items-center shadow-lg">
@@ -793,26 +769,25 @@ const Payments = () => {
                     <p className="text-xs text-gray-400 mt-1">Acumulado Tickets</p>
                 </div>
 
-                {/* 3. Otros Movimientos (Ahora con botón Ingreso/Gasto) */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-36 relative overflow-hidden group">
+                {/* 3. Otros Movimientos (Con botón SUTIL abajo) */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-center h-36 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-50"><ArrowDownLeft className="text-purple-500" size={24}/></div>
                     
-                    <div>
-                        <p className="text-gray-400 text-[10px] font-bold uppercase mb-1">Ingresos / Gastos</p>
-                        <div className="flex items-baseline gap-2">
-                             <span className="text-2xl font-black text-gray-900 dark:text-white">
-                                {((caja?.total_gastos || 0) > 0 ? '-' : '')} S/ {caja?.total_gastos?.toFixed(2) ?? '0.00'}
-                             </span>
-                        </div>
-                        <p className="text-[10px] text-gray-400">Movimientos Manuales</p>
-                    </div>
-
+                    {/* Botón abajo a la derecha, estilo pastilla */}
                     <button 
                         onClick={() => setShowMovimientoModal(true)}
-                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-colors dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                        className="absolute bottom-4 right-4 bg-gray-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-black transition-transform active:scale-95 flex items-center gap-2 z-10 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                        <PlusCircle size={14}/> Registrar Movimiento
+                        <PlusCircle size={16}/> Registrar
                     </button>
+
+                    <div>
+                        <p className="text-gray-400 text-[10px] font-bold uppercase mb-2">Ingresos / Gastos</p>
+                        <p className="text-3xl font-black text-gray-900 dark:text-white">
+                             {((caja?.total_gastos || 0) > 0 ? '-' : '')} S/ {caja?.total_gastos?.toFixed(2) ?? '0.00'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">Movimientos Manuales</p>
+                    </div>
                 </div>
             </div>
 
@@ -984,8 +959,7 @@ const Payments = () => {
             )}
 
             {/* MODALES GLOBALES */}
-            {showSessionsModal && renderSessionsModal()}
-            {showTimelineModal && renderTimelineModal()}
+            {showDiarioModal && renderDiarioModal()}
             {showDetailModal && renderDetailModal()}
             {showMovimientoModal && renderMovimientoModal()}
         </div>
