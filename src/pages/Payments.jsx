@@ -3,7 +3,7 @@ import {
     Wallet, Search, ArrowUpRight, ArrowDownLeft, 
     DollarSign, CreditCard, Lock, RotateCcw, 
     RefreshCw, X, Clock, FileText, Calendar, User, Eye, AlertTriangle,
-    CheckCircle, Unlock, ArrowDownCircle
+    CheckCircle, Unlock, ArrowDownCircle, AlertCircle
 } from 'lucide-react';
 import api from '../api/axiosConfig';
 
@@ -15,24 +15,32 @@ const Payments = () => {
     // Tabla y Filtros
     const [tickets, setTickets] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('TODOS'); // TODOS, PENDIENTE, PAGADO
+    const [statusFilter, setStatusFilter] = useState('TODOS');
     const [fechaDesde, setFechaDesde] = useState('');
     const [fechaHasta, setFechaHasta] = useState('');
   
-    const [infoModal, setInfoModal] = useState({ show: false, title: '', message: '', type: 'info' });
-    
     const [nextUrl, setNextUrl] = useState(null);
     const [prevUrl, setPrevUrl] = useState(null);
 
     // Modales Operativos
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [showPayModal, setShowPayModal] = useState(false);
-    const [showExtornoModal, setShowExtornoModal] = useState(false);
     const [showCerrar, setShowCerrar] = useState(false);
-    const [showConfirmAbrir, setShowConfirmAbrir] = useState(false); // Modal confirmación apertura
+    
+    // Sistema de Modales Unificado
+    const [modalConfig, setModalConfig] = useState({ 
+        show: false, 
+        title: '', 
+        message: '', 
+        type: 'info', 
+        action: null,
+        confirmText: 'Aceptar',
+        showCancel: false
+    });
 
     // Modales Historial
     const [showSessionsModal, setShowSessionsModal] = useState(false);
+    const [loadingHistory, setLoadingHistory] = useState(false); // Nuevo estado
     const [showTimelineModal, setShowTimelineModal] = useState(false);
     const [sessionsList, setSessionsList] = useState([]);
     const [selectedSessionTimeline, setSelectedSessionTimeline] = useState([]);
@@ -52,15 +60,27 @@ const Payments = () => {
         comentarios: ''
     });
 
+    // --- HELPERS MODALES ---
+    const showModal = (title, message, type = 'info') => {
+        setModalConfig({ show: true, title, message, type, showCancel: false, confirmText: 'Entendido' });
+    };
+
+    const showConfirm = (title, message, action, type = 'warning', confirmText = 'Confirmar') => {
+        setModalConfig({ show: true, title, message, type, action, showCancel: true, confirmText });
+    };
+
+    const closeModal = () => setModalConfig({ ...modalConfig, show: false });
+
     // --- CARGA INICIAL ---
     const fetchCaja = async () => {
         setLoading(true);
         try {
             const res = await api.get('pagos/caja/mi_caja/');
             setCaja(res.data);
-            if (res.data) fetchTableData();
+            fetchTableData(); 
         } catch (error) {
             console.error("Error cargando caja", error);
+            fetchTableData();
         } finally {
             setLoading(false);
         }
@@ -72,14 +92,10 @@ const Payments = () => {
             if (!endpoint) {
                 const params = new URLSearchParams();
                 if (searchTerm) params.append('search', searchTerm);
-                
-                // Filtros exactos
                 if (statusFilter === 'PENDIENTE') params.append('pendientes_pago', 'true');
                 if (statusFilter === 'PAGADO') params.append('estado', 'ENTREGADO'); 
-                
                 if (fechaDesde) params.append('fecha_desde', fechaDesde);
                 if (fechaHasta) params.append('fecha_hasta', fechaHasta);
-                
                 endpoint = `tickets/?${params.toString()}`;
             }
             const res = await api.get(endpoint);
@@ -90,18 +106,20 @@ const Payments = () => {
     };
 
     useEffect(() => { fetchCaja(); }, []);
-    useEffect(() => { if(caja) fetchTableData(); }, [searchTerm, statusFilter, fechaDesde, fechaHasta]);
+    useEffect(() => { fetchTableData(); }, [searchTerm, statusFilter, fechaDesde, fechaHasta]);
 
     // --- ACCIONES DE CAJA ---
     
-    // 1. Importar último cierre
     const handleImportarCierre = async (e) => {
-        if (!e.target.checked) return; // Si desmarca, no hacemos nada (o podríamos limpiar)
+        if (!e.target.checked) {
+            setAperturaValues({ EFECTIVO: '', YAPE: '', PLIN: '', TARJETA: '' });
+            return;
+        }
 
         try {
             const res = await api.get('pagos/caja/ultimo_cierre/');
             if (!res.data) {
-                alert("No se encontró un cierre anterior.");
+                showModal("Sin Datos", "No se encontró un cierre anterior para importar.", "warning");
                 e.target.checked = false;
                 return;
             }
@@ -115,38 +133,45 @@ const Payments = () => {
             
         } catch (error) {
             console.error("Error importando cierre", error);
-            alert("Error al obtener datos del último cierre.");
+            showModal("Error", "Error al obtener datos del último cierre.", "error");
+            e.target.checked = false;
         }
     };
 
-    // 2. Ejecutar Apertura
-    const confirmarApertura = async () => {
+    const executeApertura = async () => {
         const montoEfectivo = parseFloat(aperturaValues.EFECTIVO) || 0;
-        
-        // El resto de medios se van al detalle_apertura
         const detalle = {
             YAPE: parseFloat(aperturaValues.YAPE) || 0,
             PLIN: parseFloat(aperturaValues.PLIN) || 0,
             TARJETA: parseFloat(aperturaValues.TARJETA) || 0
         };
 
-        if(montoEfectivo < 0) return alert("El monto no puede ser negativo");
+        if(montoEfectivo < 0) return showModal("Error", "El monto no puede ser negativo", "error");
 
         try {
+            closeModal(); 
             const res = await api.post('pagos/caja/abrir/', { 
                 monto_inicial: montoEfectivo, 
                 detalle_apertura: detalle      
             });
             setCaja(res.data);
-            setShowConfirmAbrir(false);
             fetchTableData();
         } catch (e) { 
-            setShowConfirmAbrir(false);
-            alert(e.response?.data?.error || "Error al abrir"); 
+            showModal("Error de Apertura", e.response?.data?.error || "Error al abrir", "error");
         }
     };
 
-    // --- NUEVA FUNCIÓN: AUTOCOMPLETAR CIERRE ---
+    const onConfirmAperturaClick = () => {
+        const total = (parseFloat(aperturaValues.EFECTIVO)||0) + (parseFloat(aperturaValues.YAPE)||0) + (parseFloat(aperturaValues.PLIN)||0) + (parseFloat(aperturaValues.TARJETA)||0);
+        showConfirm(
+            "Confirmar Apertura",
+            `Se iniciará el turno con un saldo inicial total de S/ ${total.toFixed(2)}.`,
+            executeApertura,
+            "info",
+            "Sí, Abrir Caja"
+        );
+    };
+
     const handleAutoFillCierre = (e) => {
         if (e.target.checked && caja?.desglose_pagos) {
             setCierreDetalle(prev => ({
@@ -160,12 +185,10 @@ const Payments = () => {
         }
     };
 
-    const handleCerrar = async () => {
+    const executeCierre = async () => {
         const totalReal = Object.keys(cierreDetalle)
             .filter(k => k !== 'comentarios')
             .reduce((sum, key) => sum + (parseFloat(cierreDetalle[key]) || 0), 0);
-
-        if(totalReal <= 0 && !window.confirm("¿Estás cerrando caja en CERO?")) return;
 
         const detalleTexto = Object.keys(cierreDetalle)
             .filter(k => k !== 'comentarios' && cierreDetalle[k])
@@ -174,24 +197,37 @@ const Payments = () => {
         const comentarioFinal = `${cierreDetalle.comentarios} | Detalle Cierre: [ ${detalleTexto} ]`;
 
         try {
+            closeModal();
             await api.post(`pagos/caja/${caja.id}/cerrar/`, { 
                 monto_real: totalReal,
                 comentarios: comentarioFinal,
-                detalle_cierre: cierreDetalle // Enviamos también el objeto estructurado
+                detalle_cierre: cierreDetalle
             });
             setCaja(null);
             setShowCerrar(false);
             setTickets([]);
             setCierreDetalle({EFECTIVO: '', YAPE: '', PLIN: '', TARJETA: '', comentarios: ''});
+            showModal("Turno Cerrado", "La caja ha sido cerrada exitosamente.", "success");
         } catch (e) { 
-            console.error(e);
-            alert("Error al cerrar: " + (e.response?.data?.error || "Error interno")); 
+            showModal("Error al Cerrar", e.response?.data?.error || "Error interno", "error");
+        }
+    };
+
+    const handleCerrarClick = () => {
+        const totalReal = Object.keys(cierreDetalle)
+            .filter(k => k !== 'comentarios')
+            .reduce((sum, key) => sum + (parseFloat(cierreDetalle[key]) || 0), 0);
+            
+        if(totalReal <= 0) {
+            showConfirm("¿Cierre en CERO?", "Estás cerrando la caja con S/ 0.00. ¿Es correcto?", executeCierre, "warning", "Sí, Cerrar");
+        } else {
+            executeCierre();
         }
     };
 
     const handleRegisterPayment = async () => {
         if (!payAmount || parseFloat(payAmount) <= 0) {
-            setInfoModal({ show: true, title: 'Monto Inválido', message: 'Ingrese un monto mayor a 0', type: 'error' });
+            showModal("Monto Inválido", "Ingrese un monto mayor a 0", "error");
             return;
         }
         
@@ -205,67 +241,63 @@ const Payments = () => {
             
             setShowPayModal(false);
             setPayAmount('');
-            
-            setInfoModal({ 
-                show: true, 
-                title: 'Pago Exitoso', 
-                message: 'El pago ha sido registrado en caja correctamente.', 
-                type: 'success' 
-            });
+            showModal("Pago Exitoso", "El pago ha sido registrado en caja correctamente.", "success");
             
             fetchCaja(); 
             fetchTableData(); 
             
         } catch (error) {
-            const msg = error.response?.data?.error || "Error al realizar el pago";
-            setInfoModal({ show: true, title: 'Error de Pago', message: msg, type: 'error' });
+            showModal("Error de Pago", error.response?.data?.error || "Error al realizar el pago", "error");
+        }
+    };
+
+    const executeExtorno = async () => {
+        try {
+            closeModal();
+            const res = await api.get(`pagos/?search=${selectedTicket.numero_ticket}`);
+            const pagos = res.data.results || res.data;
+            
+            // Lógica corregida para buscar el pago de hoy de forma robusta
+            const pagoExtornable = pagos.find(p => p.estado === 'PAGADO' && p.es_anulable);
+
+            if (!pagoExtornable) {
+                return showModal("No Extornable", "No se encontró un pago válido de HOY para este ticket.", "warning");
+            }
+
+            await api.post(`pagos/${pagoExtornable.id}/anular/`);
+            showModal("Extorno Exitoso", "El dinero ha retornado al ticket y se descontó de caja.", "success");
+
+            fetchCaja();
+            fetchTableData();
+        } catch (e) { 
+            showModal("Error", "Error al extornar: " + (e.response?.data?.error || "Error de conexión"), "error");
         }
     };
 
     const confirmExtorno = (ticket) => {
         setSelectedTicket(ticket);
-        setShowExtornoModal(true);
-    };
-
-    const handleExtorno = async () => {
-        try {
-            const res = await api.get(`pagos/?search=${selectedTicket.numero_ticket}`);
-            const pagos = res.data.results || res.data;
-            
-            const hoy = new Date().toLocaleDateString('en-CA'); 
-            const pagoExtornable = pagos.find(p => p.estado === 'PAGADO' && p.fecha_pago.startsWith(hoy));
-
-            if (!pagoExtornable) {
-                setShowExtornoModal(false);
-                return alert("No hay pago válido de HOY para extornar.");
-            }
-
-            await api.post(`pagos/${pagoExtornable.id}/anular/`);
-            
-            setShowExtornoModal(false);
-            
-            setInfoModal({ 
-                show: true, 
-                title: 'Extorno Exitoso', 
-                message: 'El dinero ha retornado al ticket y se descontó de caja.', 
-                type: 'success' 
-            });
-
-            fetchCaja();
-            fetchTableData();
-        } catch (e) { 
-            console.error(e);
-            alert("Error al extornar: " + (e.response?.data?.error || "Error de conexión")); 
-        }
+        showConfirm("¿Confirmar Extorno?", 
+            `El pago del ticket ${ticket.numero_ticket} será anulado y el dinero descontado de caja.`, 
+            executeExtorno, 
+            "error", 
+            "Sí, Extornar"
+        );
     };
 
     // --- HISTORIAL ---
     const openSessionsHistory = async () => {
         setShowSessionsModal(true);
+        setLoadingHistory(true);
+        setSessionsList([]); // Limpiar lista anterior
         try {
             const res = await api.get('pagos/caja/');
             setSessionsList(res.data.results || res.data);
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error("Error historial:", e);
+            // Si hay error (ej. 500), se quedará vacía y mostrará "No hay registros" o podrías mostrar alerta
+        } finally {
+            setLoadingHistory(false);
+        }
     };
 
     const openSessionTimeline = async (session) => {
@@ -278,12 +310,50 @@ const Payments = () => {
         } catch (e) { console.error(e); }
     };
 
-    // --- LOADING ---
+    // --- RENDERIZADO ---
     if (loading) {
         return <div className="h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
         </div>;
     }
+
+    // --- MODAL CONFIG (REUTILIZABLE) ---
+    const renderGlobalModal = () => (
+        modalConfig.show && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl text-center border border-gray-100 dark:border-gray-700">
+                    <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                        modalConfig.type === 'error' ? 'bg-red-100 text-red-500' : 
+                        modalConfig.type === 'success' ? 'bg-emerald-100 text-emerald-500' : 
+                        modalConfig.type === 'warning' ? 'bg-yellow-100 text-yellow-600' : 'bg-blue-100 text-blue-500'
+                    }`}>
+                        {modalConfig.type === 'error' ? <AlertTriangle size={24}/> : 
+                         modalConfig.type === 'success' ? <CheckCircle size={24}/> : 
+                         modalConfig.type === 'warning' ? <AlertCircle size={24}/> : <CheckCircle size={24}/>}
+                    </div>
+                    <h3 className="text-lg font-bold mb-2 dark:text-white">{modalConfig.title}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{modalConfig.message}</p>
+                    <div className="flex gap-2">
+                        {modalConfig.showCancel && (
+                            <button onClick={closeModal} className="flex-1 bg-gray-100 py-2.5 rounded-xl font-bold dark:bg-gray-700 dark:text-white hover:bg-gray-200">
+                                Cancelar
+                            </button>
+                        )}
+                        <button 
+                            onClick={modalConfig.action || closeModal} 
+                            className={`flex-1 text-white py-2.5 rounded-xl font-bold transition-colors ${
+                                modalConfig.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 
+                                modalConfig.type === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700' : 
+                                modalConfig.type === 'success' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-900 hover:bg-black dark:bg-blue-600 dark:hover:bg-blue-700'
+                            }`}
+                        >
+                            {modalConfig.confirmText}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    );
 
     // --- VISTA CAJA CERRADA ---
     if (!caja) {
@@ -296,7 +366,6 @@ const Payments = () => {
                         <p className="text-gray-500 text-sm">Ingrese los saldos iniciales para comenzar.</p>
                     </div>
 
-                    {/* CHECKBOX IMPORTAR */}
                     <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex items-center gap-3 border border-blue-100 dark:border-blue-800">
                         <input 
                             type="checkbox" 
@@ -309,7 +378,6 @@ const Payments = () => {
                         </label>
                     </div>
 
-                    {/* FORMULARIO GRID - ESTILO UNIFICADO */}
                     <div className="grid grid-cols-2 gap-4 mb-6">
                         {[
                             { id: 'EFECTIVO', label: 'Efectivo', icon: DollarSign },
@@ -334,7 +402,7 @@ const Payments = () => {
                         ))}
                     </div>
 
-                    <button onClick={() => setShowConfirmAbrir(true)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all">
+                    <button onClick={onConfirmAperturaClick} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all">
                         Abrir Turno
                     </button>
                     
@@ -345,24 +413,7 @@ const Payments = () => {
                     </div>
                 </div>
 
-                {/* MODAL CONFIRMACIÓN APERTURA */}
-                {showConfirmAbrir && (
-                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl text-center">
-                            <h3 className="text-lg font-bold mb-4 dark:text-white">Confirmar Apertura</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                                Se abrirá la caja con los siguientes saldos:<br/>
-                                <span className="font-bold text-emerald-600">Efectivo: S/ {parseFloat(aperturaValues.EFECTIVO || 0).toFixed(2)}</span><br/>
-                                <span className="text-xs">Otros: S/ {(parseFloat(aperturaValues.YAPE || 0) + parseFloat(aperturaValues.PLIN || 0) + parseFloat(aperturaValues.TARJETA || 0)).toFixed(2)}</span>
-                            </p>
-                            <div className="flex gap-2">
-                                <button onClick={() => setShowConfirmAbrir(false)} className="flex-1 bg-gray-100 py-2 rounded-lg font-bold dark:bg-gray-700 dark:text-white">Cancelar</button>
-                                <button onClick={confirmarApertura} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold">Sí, Abrir</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
+                {renderGlobalModal()}
                 {showSessionsModal && renderSessionsModal()}
                 {showTimelineModal && renderTimelineModal()}
             </div>
@@ -372,13 +423,20 @@ const Payments = () => {
     // --- RENDER MODALES AUXILIARES ---
     function renderSessionsModal() {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+            // AUMENTÉ EL Z-INDEX A 200 PARA QUE ESTÉ POR ENCIMA DE TODO
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-2xl shadow-2xl h-[80vh] flex flex-col">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold flex items-center gap-2"><Clock size={20}/> Historial</h3>
                         <button onClick={() => setShowSessionsModal(false)} className="text-gray-400 hover:text-red-500"><X size={20}/></button>
                     </div>
-                    <div className="overflow-y-auto flex-1 border rounded-xl dark:border-gray-700">
+                    
+                    <div className="overflow-y-auto flex-1 border rounded-xl dark:border-gray-700 relative">
+                        {loadingHistory && (
+                            <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex items-center justify-center z-10">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+                            </div>
+                        )}
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
                                 <tr>
@@ -392,7 +450,6 @@ const Payments = () => {
                                 {sessionsList.map(s => (
                                     <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                         <td className="p-3 text-xs">{new Date(s.fecha_apertura).toLocaleString()}</td>
-                                        {/* CORREGIDO: Usamos usuario_nombre en lugar de usuario (ID) */}
                                         <td className="p-3 font-medium">{s.usuario_nombre || `ID: ${s.usuario}`}</td>
                                         <td className="p-3 text-right font-bold">S/ {s.saldo_actual?.toFixed(2)}</td>
                                         <td className="p-3 text-center">
@@ -400,7 +457,7 @@ const Payments = () => {
                                         </td>
                                     </tr>
                                 ))}
-                                {sessionsList.length === 0 && (
+                                {!loadingHistory && sessionsList.length === 0 && (
                                     <tr>
                                         <td colSpan="4" className="p-8 text-center text-gray-400">No hay registros de cajas anteriores.</td>
                                     </tr>
@@ -416,7 +473,7 @@ const Payments = () => {
     function renderTimelineModal() {
         if (!selectedSessionInfo) return null;
         return (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in">
+            <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in">
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl h-[90vh] flex flex-col">
                     <div className="flex justify-between items-start mb-4 border-b pb-4 dark:border-gray-700">
                         <h3 className="text-xl font-bold flex items-center gap-2"><FileText size={24}/> Diario Electrónico</h3>
@@ -453,7 +510,8 @@ const Payments = () => {
 
     // --- VISTA PRINCIPAL ---
     return (
-        <div className="p-6 h-full flex flex-col text-gray-800 dark:text-gray-100">
+        <div className="p-6 h-full flex flex-col text-gray-800 dark:text-gray-100 relative">
+            {renderGlobalModal()}
             {/* Header */}
             <div className="flex justify-between items-center mb-4">
                 <div>
@@ -475,20 +533,16 @@ const Payments = () => {
             {/* Scorecards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
                 
-                {/* 1. Saldo Total (VERDE ESMERALDA OSCURO & REDISEÑADO) */}
+                {/* 1. Saldo Total */}
                 <div className="bg-emerald-700 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden flex items-center h-36">
                     <div className="absolute right-[-20px] bottom-[-40px] opacity-10 rotate-12"><DollarSign size={150}/></div>
                     
-                    {/* IZQUIERDA: Global (Dominante y Gigante) */}
                     <div className="flex-1 flex flex-col justify-center border-r border-emerald-600/30 pr-4 relative z-10">
                         <p className="text-emerald-100 text-[10px] font-bold uppercase tracking-widest mb-1">Saldo Total</p>
                         <p className="text-5xl font-black tracking-tighter leading-none">S/ {caja?.saldo_actual?.toFixed(2) ?? '0.00'}</p>
                     </div>
 
-                    {/* DERECHA: Desglose Vertical */}
                     <div className="w-[45%] pl-4 flex flex-col justify-center h-full relative z-10 space-y-3">
-                        
-                        {/* Mitad Arriba: Efectivo */}
                         <div>
                             <div className="flex justify-between items-end mb-1">
                                 <span className="text-emerald-100 text-[10px] font-bold uppercase opacity-80">Efectivo</span>
@@ -499,13 +553,11 @@ const Payments = () => {
                             </div>
                         </div>
 
-                        {/* Mitad Abajo: Digital + Desglose Detallado */}
                         <div>
                             <div className="flex justify-between items-end mb-1">
                                 <span className="text-emerald-100 text-[10px] font-bold uppercase opacity-80">Digital</span>
                                 <span className="text-xl font-bold leading-none whitespace-nowrap">S/ {caja?.total_digital?.toFixed(2) ?? '0.00'}</span>
                             </div>
-                            {/* Desglose Vertical Compacto con Nombres Completos */}
                             <div className="flex flex-col text-[9px] font-medium text-emerald-100 bg-emerald-800/40 rounded px-2 py-1 mt-1 space-y-0.5">
                                 <div className="flex justify-between"><span>Yape:</span> <span>S/ {caja?.desglose_pagos?.YAPE?.toFixed(2) ?? '0.00'}</span></div>
                                 <div className="flex justify-between"><span>Plin:</span> <span>S/ {caja?.desglose_pagos?.PLIN?.toFixed(2) ?? '0.00'}</span></div>
@@ -591,7 +643,10 @@ const Payments = () => {
                                         {t.saldo_pendiente > 0 ? (
                                             <button onClick={() => { setSelectedTicket(t); setPayAmount(t.saldo_pendiente); setShowPayModal(true); }} className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg tooltip" title="Cobrar"><DollarSign size={16}/></button>
                                         ) : (
-                                            <button onClick={() => confirmExtorno(t)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg tooltip" title="Extornar"><RotateCcw size={16}/></button>
+                                            /* EXTORNO CONDICIONAL: Solo si tiene pagos de hoy */
+                                            t.es_extornable && (
+                                                <button onClick={() => confirmExtorno(t)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg tooltip" title="Extornar"><RotateCcw size={16}/></button>
+                                            )
                                         )}
                                     </td>
                                 </tr>
@@ -620,51 +675,13 @@ const Payments = () => {
                 </div>
             )}
 
-            {/* MODAL INFORMATIVO GENÉRICO (Reemplazo de Alerts) */}
-            {infoModal.show && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl text-center border border-gray-100 dark:border-gray-700">
-                        <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
-                            infoModal.type === 'error' ? 'bg-red-100 text-red-500' : 
-                            infoModal.type === 'success' ? 'bg-emerald-100 text-emerald-500' : 'bg-blue-100 text-blue-500'
-                        }`}>
-                            {infoModal.type === 'error' ? <AlertTriangle size={24}/> : <CheckCircle size={24}/>}
-                        </div>
-                        <h3 className="text-lg font-bold mb-2 dark:text-white">{infoModal.title}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{infoModal.message}</p>
-                        <button 
-                            onClick={() => setInfoModal({ ...infoModal, show: false })} 
-                            className="w-full bg-gray-900 hover:bg-black dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 text-white py-2.5 rounded-xl font-bold transition-colors"
-                        >
-                            Entendido
-                        </button>
-                    </div>
-                </div>
-            )}
-            
-            {/* MODAL EXTORNO ADVERTENCIA */}
-            {showExtornoModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-xs shadow-2xl text-center">
-                        <div className="mx-auto w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={24}/></div>
-                        <h3 className="text-lg font-bold mb-2">¿Confirmar Extorno?</h3>
-                        <p className="text-sm text-gray-500 mb-6">El pago del ticket <span className="font-bold">{selectedTicket?.numero_ticket}</span> será anulado y el dinero descontado de caja.</p>
-                        <div className="flex gap-2">
-                             <button onClick={()=>setShowExtornoModal(false)} className="flex-1 bg-gray-100 py-2 rounded-lg font-bold dark:bg-gray-700">Cancelar</button>
-                             <button onClick={handleExtorno} className="flex-1 bg-red-600 text-white py-2 rounded-lg font-bold">Sí, Extornar</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL CIERRE DE CAJA DETALLADO (Sin Transferencia) */}
+            {/* MODAL CIERRE DE CAJA DETALLADO */}
             {showCerrar && (
                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-lg shadow-2xl">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2"><Lock size={20}/> Cierre y Cuadre de Caja</h3>
                             
-                            {/* CHECKBOX AUTOCOMPLETAR */}
                             <label className="flex items-center gap-2 text-sm text-blue-600 font-bold cursor-pointer hover:text-blue-700">
                                 <input type="checkbox" onChange={handleAutoFillCierre} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
                                 Autocompletar con saldos del sistema
@@ -704,7 +721,6 @@ const Payments = () => {
                                             </tr>
                                         )
                                     })}
-                                    {/* Mostrar Transferencia SOLO si hay saldo (para no perder el rastro si hubo alguna) */}
                                     {parseFloat(caja?.desglose_pagos?.TRANSFERENCIA || 0) > 0 && (
                                         <tr>
                                             <td className="p-3 font-bold text-xs text-purple-500">TRANSF.</td>
@@ -734,7 +750,7 @@ const Payments = () => {
                         />
                         <div className="flex gap-2">
                              <button onClick={()=>setShowCerrar(false)} className="flex-1 bg-gray-100 py-2 rounded-lg font-bold dark:bg-gray-700">Cancelar</button>
-                             <button onClick={handleCerrar} className="flex-1 bg-gray-900 text-white py-2 rounded-lg font-bold">Cerrar Turno</button>
+                             <button onClick={handleCerrarClick} className="flex-1 bg-gray-900 text-white py-2 rounded-lg font-bold">Cerrar Turno</button>
                         </div>
                     </div>
                  </div>
@@ -743,4 +759,4 @@ const Payments = () => {
     );
 };
 
-export default Payments
+export default Payments;

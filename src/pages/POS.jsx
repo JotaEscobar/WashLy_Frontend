@@ -13,7 +13,6 @@ const POS = () => {
     const [clientSearch, setClientSearch] = useState('');
     const [selectedClient, setSelectedClient] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
 
     // --- TICKET ---
     const [cart, setCart] = useState([]);
@@ -26,20 +25,16 @@ const POS = () => {
     const [paymentAmount, setPaymentAmount] = useState(''); 
     const [paymentMethod, setPaymentMethod] = useState('EFECTIVO'); 
 
-    // --- MODALES ---
-    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    // --- MODALES (NUEVO SISTEMA UNIFICADO) ---
     const [createdTicket, setCreatedTicket] = useState(null);
-    const [showClientModal, setShowClientModal] = useState(false); // <--- NUEVO: Modal Cliente
+    const [showClientModal, setShowClientModal] = useState(false);
+    const [infoModal, setInfoModal] = useState({ 
+        show: false, title: '', message: '', type: 'info', action: null, confirmText: 'Entendido', showCancel: false
+    });
 
     // --- FORMULARIO NUEVO CLIENTE ---
     const [newClientData, setNewClientData] = useState({
-        tipo_documento: 'DNI',
-        numero_documento: '',
-        nombres: '',
-        apellidos: '',
-        telefono: '',
-        email: '',
-        direccion: ''
+        tipo_documento: 'DNI', numero_documento: '', nombres: '', apellidos: '', telefono: '', email: '', direccion: ''
     });
 
     const searchTimeoutRef = useRef(null);
@@ -51,6 +46,11 @@ const POS = () => {
         return tomorrow.toISOString().slice(0, 16);
     };
     const [deliveryDate, setDeliveryDate] = useState(getDefaultDeliveryDate());
+
+    // --- HELPERS MODALES ---
+    const showInfo = (title, message, type='info') => setInfoModal({ show: true, title, message, type, showCancel: false, confirmText: 'Aceptar' });
+    const showConfirm = (title, message, action) => setInfoModal({ show: true, title, message, type: 'warning', action, showCancel: true, confirmText: 'Confirmar' });
+    const closeInfoModal = () => setInfoModal({ ...infoModal, show: false });
 
     // CARGA INICIAL
     useEffect(() => {
@@ -68,7 +68,7 @@ const POS = () => {
                 setLoading(false);
             } catch (err) {
                 console.error("Error catálogo:", err);
-                setError("Error de conexión.");
+                showInfo("Error", "Error de conexión al cargar el catálogo.", "error");
                 setLoading(false);
             }
         };
@@ -121,59 +121,60 @@ const POS = () => {
     const handleCreateClient = async (e) => {
         e.preventDefault();
         
-        // Validación básica
         if (!newClientData.numero_documento || !newClientData.nombres || !newClientData.telefono) {
-            alert("⚠️ DNI, Nombres y Teléfono son obligatorios.");
+            showInfo("Datos Faltantes", "DNI, Nombres y Teléfono son obligatorios.", "warning");
             return;
         }
 
         try {
             const response = await api.post('clientes/', newClientData);
             
-            // Éxito: Seleccionamos al nuevo cliente y cerramos modal
             setSelectedClient(response.data);
             setShowClientModal(false);
-            setNewClientData({ // Reset form
+            setNewClientData({
                 tipo_documento: 'DNI', numero_documento: '', nombres: '', apellidos: '', telefono: '', email: '', direccion: ''
             });
-            alert("✅ Cliente registrado correctamente");
+            showInfo("Cliente Creado", "Cliente registrado correctamente", "success");
             
         } catch (err) {
             console.error(err);
             if (err.response && err.response.data) {
-                // Manejo de errores comunes (ej. DNI duplicado)
                 const msg = JSON.stringify(err.response.data);
-                if (msg.includes("numero_documento")) alert("⚠️ El Número de Documento ya existe.");
-                else alert(`❌ Error al crear cliente: ${msg}`);
+                if (msg.includes("numero_documento")) showInfo("Duplicado", "El Número de Documento ya existe.", "error");
+                else showInfo("Error", `No se pudo crear: ${msg}`, "error");
             } else {
-                alert("❌ Error de conexión al crear cliente.");
+                showInfo("Error", "Error de conexión al crear cliente.", "error");
             }
         }
     };
 
     // --- EMISIÓN TICKET ---
     const validateAndAskConfirmation = () => {
-        if (!selectedClient) return alert("⚠️ Selecciona un cliente.");
-        if (cart.length === 0) return alert("⚠️ Carrito vacío.");
-        if (cart.some(i => !i.qty || parseFloat(i.qty) <= 0)) return alert("⚠️ Revisa las cantidades.");
+        if (!selectedClient) return showInfo("Falta Cliente", "Por favor selecciona un cliente.", "warning");
+        if (cart.length === 0) return showInfo("Carrito Vacío", "Agrega servicios a la orden.", "warning");
+        if (cart.some(i => !i.qty || parseFloat(i.qty) <= 0)) return showInfo("Cantidades", "Revisa las cantidades de los items.", "warning");
         
         const missingDesc = cart.find(item => !item.description || item.description.trim() === '');
         if (missingDesc) {
             setValidationError(missingDesc.id); 
-            alert(`⚠️ El detalle es OBLIGATORIO para: ${missingDesc.nombre}`);
+            showInfo("Detalle Requerido", `El detalle es OBLIGATORIO para: ${missingDesc.nombre}`, "warning");
             return;
         }
         setValidationError(null);
 
         if (paymentStatus === 'PARCIAL' && (!paymentAmount || parseFloat(paymentAmount) <= 0)) {
-            return alert("⚠️ Ingresa el monto a cuenta.");
+            return showInfo("Monto Inválido", "Ingresa el monto a cuenta.", "warning");
         }
 
-        setShowConfirmModal(true);
+        showConfirm(
+            "¿Confirmar Emisión?",
+            `Se registrará la orden por S/ ${total.toFixed(2)}.`,
+            handleEmitTicket
+        );
     };
 
     const handleEmitTicket = async () => {
-        setShowConfirmModal(false);
+        closeInfoModal();
         
         let montoEnviar = 0;
         if (paymentStatus !== 'PENDIENTE' && paymentAmount) {
@@ -201,11 +202,7 @@ const POS = () => {
             setCreatedTicket(response.data);
         } catch (err) {
             console.error("Error:", err);
-            if (err.response && err.response.data) {
-                alert(`❌ ERROR: ${JSON.stringify(err.response.data)}`);
-            } else {
-                alert("❌ Error de conexión.");
-            }
+            showInfo("Error", err.response?.data?.error || "Error al emitir ticket", "error");
         }
     };
 
@@ -226,8 +223,6 @@ const POS = () => {
                 <title>Ticket #${createdTicket.numero_ticket}</title>
                 <style>
                     body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px; width: 80mm; text-align: center; }
-                    .system-name { font-size: 9px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
-                    .business-name { font-size: 18px; font-weight: 900; margin: 5px 0; text-transform: uppercase; display: block; }
                     .header { margin-bottom: 15px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
                     .info { text-align: left; margin-bottom: 10px; font-size: 11px; line-height: 1.4; }
                     table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; }
@@ -239,75 +234,38 @@ const POS = () => {
                     .sub-row { display: flex; justify-content: space-between; font-size: 12px; }
                     .qr-container { margin-top: 20px; display: flex; flex-direction: column; align-items: center; }
                     img { width: 120px; height: 120px; }
-                    .footer { margin-top: 20px; font-size: 10px; font-style: italic; color: #444; }
                 </style>
             </head>
             <body>
                 <div class="header">
-                    <span class="system-name">Sistema Washly</span>
-                    <span class="business-name">LAVANDERÍA SUPER CLEAN</span>
-                    <div>RUC: 20601234567</div>
-                    <div>Av. Principal 123, Lima - Perú</div>
-                    <div>Telf: (01) 234-5678</div>
+                    <strong>LAVANDERÍA SUPER CLEAN</strong><br>
+                    RUC: 20601234567<br>
+                    Av. Principal 123
                 </div>
-                
                 <div class="info">
                     <strong>TICKET: ${createdTicket.numero_ticket}</strong><br>
-                    Fecha: ${new Date(createdTicket.creado_en || Date.now()).toLocaleString()}<br>
-                    Cliente: <strong>${selectedClient?.nombre_completo || 'Público General'}</strong><br>
+                    Cliente: <strong>${selectedClient?.nombre_completo}</strong><br>
                     Entrega: <strong>${createdTicket.tipo_entrega}</strong>
                 </div>
-
                 <table>
-                    <thead>
-                        <tr>
-                            <th width="15%">Cant</th>
-                            <th width="60%">Descripción</th>
-                            <th width="25%" class="text-right">Total</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th width="15%">Cant</th><th width="60%">Descripción</th><th width="25%" class="text-right">Total</th></tr></thead>
                     <tbody>
                         ${cart.map(item => `
                             <tr>
                                 <td>${item.qty}</td>
-                                <td>
-                                    <strong>${item.nombre}</strong><br>
-                                    <span style="font-size:10px;">${item.description || ''}</span>
-                                </td>
+                                <td><strong>${item.nombre}</strong><br><span style="font-size:10px;">${item.description || ''}</span></td>
                                 <td class="text-right">${((parseFloat(item.qty)||0) * item.precio_base).toFixed(2)}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
-
                 <div class="totals">
-                    <div class="total-row">
-                        <span>TOTAL:</span>
-                        <span>S/ ${total.toFixed(2)}</span>
-                    </div>
-                    <div class="sub-row">
-                        <span>A Cuenta:</span>
-                        <span>S/ ${paymentStatus === 'PENDIENTE' ? '0.00' : parseFloat(paymentAmount || 0).toFixed(2)}</span>
-                    </div>
-                    <div class="sub-row">
-                        <span>Saldo:</span>
-                        <span>S/ ${(total - (paymentStatus === 'PENDIENTE' ? 0 : parseFloat(paymentAmount || 0))).toFixed(2)}</span>
-                    </div>
+                    <div class="total-row"><span>TOTAL:</span><span>S/ ${total.toFixed(2)}</span></div>
+                    <div class="sub-row"><span>A Cuenta:</span><span>S/ ${paymentStatus === 'PENDIENTE' ? '0.00' : parseFloat(paymentAmount || 0).toFixed(2)}</span></div>
+                    <div class="sub-row"><span>Saldo:</span><span>S/ ${(total - (paymentStatus === 'PENDIENTE' ? 0 : parseFloat(paymentAmount || 0))).toFixed(2)}</span></div>
                 </div>
-
-                ${ticketObservations ? `
-                <div style="text-align:left; margin-top: 10px; border: 1px solid #ccc; padding: 5px; font-size: 10px;">
-                    <strong>NOTA:</strong> ${ticketObservations}
-                </div>` : ''}
-
                 <div class="qr-container">
                     ${qrUrl ? `<img src="${qrUrl}" />` : 'QR no disponible'}
-                    <span style="font-size: 10px; margin-top: 5px;">Escanear para ver estado</span>
-                </div>
-
-                <div class="footer">
-                    ¡Gracias por su preferencia!<br>
-                    Conserve este ticket para el recojo.
                 </div>
             </body>
             </html>
@@ -328,6 +286,28 @@ const POS = () => {
     return (
         <div className="h-[calc(100vh-4rem)] flex gap-6 p-2 relative text-gray-800 dark:text-gray-100">
             
+            {/* MODAL GLOBAL (INFO/CONFIRM) */}
+            {infoModal.show && (
+                <div className="absolute inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center animate-in fade-in">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-96 text-center border border-gray-200 dark:border-gray-700">
+                         <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                            infoModal.type === 'error' ? 'bg-red-100 text-red-500' : 
+                            infoModal.type === 'success' ? 'bg-emerald-100 text-emerald-500' : 'bg-blue-100 text-blue-500'
+                        }`}>
+                            {infoModal.type === 'error' ? <AlertTriangle size={24}/> : <CheckCircle size={24}/>}
+                        </div>
+                        <h3 className="text-lg font-bold mb-2 dark:text-white">{infoModal.title}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{infoModal.message}</p>
+                        <div className="flex gap-2">
+                            {infoModal.showCancel && (
+                                <button onClick={closeInfoModal} className="flex-1 bg-gray-100 py-2.5 rounded-xl font-bold dark:bg-gray-700 dark:text-white hover:bg-gray-200">Cancelar</button>
+                            )}
+                            <button onClick={infoModal.action || closeInfoModal} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg">{infoModal.confirmText}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* MODAL CREAR CLIENTE */}
             {showClientModal && (
                 <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
@@ -342,6 +322,7 @@ const POS = () => {
                         </div>
 
                         <form onSubmit={handleCreateClient} className="space-y-4">
+                            {/* ... (Mismo formulario anterior) ... */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">Tipo Doc.</label>
@@ -366,66 +347,29 @@ const POS = () => {
                                     />
                                 </div>
                             </div>
-
-                            <div className="grid grid-cols-2 gap-4">
+                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">Nombres *</label>
-                                    <input 
-                                        type="text" required 
-                                        className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none"
-                                        value={newClientData.nombres}
-                                        onChange={(e) => setNewClientData({...newClientData, nombres: e.target.value})}
-                                    />
+                                    <input type="text" required className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.nombres} onChange={(e) => setNewClientData({...newClientData, nombres: e.target.value})}/>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">Apellidos</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none"
-                                        value={newClientData.apellidos}
-                                        onChange={(e) => setNewClientData({...newClientData, apellidos: e.target.value})}
-                                    />
+                                    <input type="text" className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.apellidos} onChange={(e) => setNewClientData({...newClientData, apellidos: e.target.value})}/>
                                 </div>
                             </div>
-
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">Teléfono *</label>
-                                    <div className="relative">
-                                        <Phone size={16} className="absolute left-3 top-3 text-gray-400"/>
-                                        <input 
-                                            type="text" required 
-                                            className="w-full pl-9 p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none"
-                                            value={newClientData.telefono}
-                                            onChange={(e) => setNewClientData({...newClientData, telefono: e.target.value})}
-                                        />
-                                    </div>
+                                    <input type="text" required className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.telefono} onChange={(e) => setNewClientData({...newClientData, telefono: e.target.value})}/>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">Email</label>
-                                    <div className="relative">
-                                        <Mail size={16} className="absolute left-3 top-3 text-gray-400"/>
-                                        <input 
-                                            type="email" 
-                                            className="w-full pl-9 p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none"
-                                            value={newClientData.email}
-                                            onChange={(e) => setNewClientData({...newClientData, email: e.target.value})}
-                                        />
-                                    </div>
+                                    <input type="email" className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.email} onChange={(e) => setNewClientData({...newClientData, email: e.target.value})}/>
                                 </div>
                             </div>
-
-                            <div>
+                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Dirección</label>
-                                <div className="relative">
-                                    <MapPin size={16} className="absolute left-3 top-3 text-gray-400"/>
-                                    <input 
-                                        type="text" 
-                                        className="w-full pl-9 p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none"
-                                        value={newClientData.direccion}
-                                        onChange={(e) => setNewClientData({...newClientData, direccion: e.target.value})}
-                                    />
-                                </div>
+                                <input type="text" className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.direccion} onChange={(e) => setNewClientData({...newClientData, direccion: e.target.value})}/>
                             </div>
 
                             <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-all mt-2">
@@ -436,24 +380,7 @@ const POS = () => {
                 </div>
             )}
 
-            {/* MODAL CONFIRMACIÓN */}
-            {showConfirmModal && (
-                <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-96 text-center animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700">
-                        <AlertTriangle size={48} className="text-yellow-500 mx-auto mb-4"/>
-                        <h2 className="text-xl font-bold mb-2 dark:text-white">¿Confirmar Emisión?</h2>
-                        <p className="text-gray-600 dark:text-gray-300 mb-6 text-sm">
-                            Se registrará la orden por <strong className="text-gray-900 dark:text-white">S/ {total.toFixed(2)}</strong>.
-                        </p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowConfirmModal(false)} className="flex-1 py-2 rounded-lg border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium dark:text-gray-300 transition-colors">Cancelar</button>
-                            <button onClick={handleEmitTicket} className="flex-1 py-2 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all">SI, EMITIR</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL ÉXITO */}
+            {/* MODAL ÉXITO TICKET */}
             {createdTicket && (
                 <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 w-96 text-center animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700">
@@ -462,11 +389,6 @@ const POS = () => {
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">¡Orden Emitida!</h2>
                         <p className="text-gray-500 dark:text-gray-400 mt-1">Ticket N° <span className="font-mono text-gray-900 dark:text-white font-bold">{createdTicket.numero_ticket}</span></p>
-                        
-                        <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 py-2 px-4 rounded-lg inline-flex items-center gap-2 text-blue-800 dark:text-blue-300 font-bold text-sm border border-blue-100 dark:border-blue-800">
-                            {createdTicket.tipo_entrega === 'DELIVERY' ? <Truck size={16}/> : <MapPin size={16} />}
-                            {createdTicket.tipo_entrega === 'DELIVERY' ? 'Entrega por Delivery' : 'Recojo en Local'}
-                        </div>
                         
                         <div className="mt-6 flex gap-3">
                             <button onClick={handlePrintTicket} className="flex-1 btn-secondary py-3 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-bold flex justify-center gap-2 items-center hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
@@ -500,12 +422,7 @@ const POS = () => {
                                 {selectedClient && <button onClick={() => {setSelectedClient(null); setClientSearch('')}} className="absolute right-3 top-3 text-green-700 dark:text-green-400 hover:scale-110 transition-transform"><X size={20}/></button>}
                             </div>
                             
-                            {/* BOTÓN CREAR CLIENTE (AHORA SÍ FUNCIONA) */}
-                            <button 
-                                onClick={() => setShowClientModal(true)} 
-                                className="bg-blue-600 text-white px-4 rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-500/30 transition-all"
-                                title="Crear Nuevo Cliente"
-                            >
+                            <button onClick={() => setShowClientModal(true)} className="bg-blue-600 text-white px-4 rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-500/30 transition-all">
                                 <UserPlus size={24}/>
                             </button>
                         </div>
