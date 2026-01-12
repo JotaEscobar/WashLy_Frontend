@@ -3,7 +3,7 @@ import {
     Wallet, Search, ArrowUpRight, ArrowDownLeft, 
     DollarSign, CreditCard, Lock, RotateCcw, 
     RefreshCw, X, Clock, FileText, Calendar, User, Eye, AlertTriangle,
-    CheckCircle, Unlock, ArrowDownCircle, AlertCircle
+    CheckCircle, Unlock, ArrowDownCircle, AlertCircle, PlusCircle, MinusCircle
 } from 'lucide-react';
 import api from '../api/axiosConfig';
 
@@ -12,7 +12,7 @@ const Payments = () => {
     const [caja, setCaja] = useState(null);
     const [loading, setLoading] = useState(true);
     
-    // Tabla y Filtros
+    // Tabla y Filtros Tickets
     const [tickets, setTickets] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('TODOS');
@@ -27,6 +27,16 @@ const Payments = () => {
     const [showPayModal, setShowPayModal] = useState(false);
     const [showCerrar, setShowCerrar] = useState(false);
     
+    // Nuevo: Modal Movimiento Manual
+    const [showMovimientoModal, setShowMovimientoModal] = useState(false);
+    const [movimientoForm, setMovimientoForm] = useState({
+        tipo: 'EGRESO', // o INGRESO
+        categoria: 'OTROS',
+        monto: '',
+        metodo_pago: 'EFECTIVO',
+        descripcion: ''
+    });
+
     // Sistema de Modales Unificado
     const [modalConfig, setModalConfig] = useState({ 
         show: false, 
@@ -38,15 +48,21 @@ const Payments = () => {
         showCancel: false
     });
 
-    // Modales Historial
+    // Modales Historial y Diario
     const [showSessionsModal, setShowSessionsModal] = useState(false);
-    const [loadingHistory, setLoadingHistory] = useState(false); // Nuevo estado
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [historyFilters, setHistoryFilters] = useState({ desde: '', hasta: '' }); // Filtro fechas historial
+    
     const [showTimelineModal, setShowTimelineModal] = useState(false);
     const [sessionsList, setSessionsList] = useState([]);
     const [selectedSessionTimeline, setSelectedSessionTimeline] = useState([]);
     const [selectedSessionInfo, setSelectedSessionInfo] = useState(null);
     
-    // Formularios
+    // Nuevo: Modal Detalle (Ojo)
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [detailContent, setDetailContent] = useState(null);
+
+    // Formularios Apertura/Cobro
     const [aperturaValues, setAperturaValues] = useState({
         EFECTIVO: '', YAPE: '', PLIN: '', TARJETA: ''
     });
@@ -225,6 +241,34 @@ const Payments = () => {
         }
     };
 
+    // --- NUEVO: MOVIMIENTOS MANUALES ---
+    const handleRegisterMovimiento = async () => {
+        if (!movimientoForm.monto || parseFloat(movimientoForm.monto) <= 0) {
+            return showModal("Error", "Ingrese un monto válido", "error");
+        }
+        if (!movimientoForm.categoria) {
+             return showModal("Error", "Ingrese una categoría (ej. Proveedor, Personal)", "error");
+        }
+
+        try {
+            await api.post(`pagos/caja/${caja.id}/movimiento/`, {
+                tipo: movimientoForm.tipo,
+                monto: parseFloat(movimientoForm.monto),
+                categoria: movimientoForm.categoria,
+                metodo_pago: movimientoForm.metodo_pago,
+                descripcion: movimientoForm.descripcion
+            });
+            
+            setShowMovimientoModal(false);
+            setMovimientoForm({ tipo: 'EGRESO', categoria: 'OTROS', monto: '', metodo_pago: 'EFECTIVO', descripcion: '' });
+            showModal("Registrado", "Movimiento registrado correctamente en caja.", "success");
+            fetchCaja(); // Actualizar scorecards
+        } catch (e) {
+            showModal("Error", e.response?.data?.error || "Error al registrar movimiento", "error");
+        }
+    };
+
+    // --- COBROS Y EXTORNOS ---
     const handleRegisterPayment = async () => {
         if (!payAmount || parseFloat(payAmount) <= 0) {
             showModal("Monto Inválido", "Ingrese un monto mayor a 0", "error");
@@ -256,8 +300,6 @@ const Payments = () => {
             closeModal();
             const res = await api.get(`pagos/?search=${selectedTicket.numero_ticket}`);
             const pagos = res.data.results || res.data;
-            
-            // Lógica corregida para buscar el pago de hoy de forma robusta
             const pagoExtornable = pagos.find(p => p.estado === 'PAGADO' && p.es_anulable);
 
             if (!pagoExtornable) {
@@ -284,20 +326,27 @@ const Payments = () => {
         );
     };
 
-    // --- HISTORIAL ---
-    const openSessionsHistory = async () => {
-        setShowSessionsModal(true);
+    // --- HISTORIAL (DIARIOS) ---
+    const fetchSessionsHistory = async () => {
         setLoadingHistory(true);
-        setSessionsList([]); // Limpiar lista anterior
+        setSessionsList([]);
         try {
-            const res = await api.get('pagos/caja/');
+            const params = new URLSearchParams();
+            if (historyFilters.desde) params.append('fecha_desde', historyFilters.desde);
+            if (historyFilters.hasta) params.append('fecha_hasta', historyFilters.hasta);
+            
+            const res = await api.get(`pagos/caja/?${params.toString()}`);
             setSessionsList(res.data.results || res.data);
         } catch (e) { 
             console.error("Error historial:", e);
-            // Si hay error (ej. 500), se quedará vacía y mostrará "No hay registros" o podrías mostrar alerta
         } finally {
             setLoadingHistory(false);
         }
+    };
+
+    const openSessionsHistory = () => {
+        setShowSessionsModal(true);
+        fetchSessionsHistory();
     };
 
     const openSessionTimeline = async (session) => {
@@ -308,6 +357,12 @@ const Payments = () => {
             const res = await api.get(`pagos/caja/${session.id}/timeline/`);
             setSelectedSessionTimeline(res.data);
         } catch (e) { console.error(e); }
+    };
+    
+    // Función para abrir el detalle (ojo)
+    const openTransactionDetail = (item) => {
+        setDetailContent(item);
+        setShowDetailModal(true);
     };
 
     // --- RENDERIZADO ---
@@ -416,6 +471,7 @@ const Payments = () => {
                 {renderGlobalModal()}
                 {showSessionsModal && renderSessionsModal()}
                 {showTimelineModal && renderTimelineModal()}
+                {showDetailModal && renderDetailModal()}
             </div>
         );
     }
@@ -423,14 +479,22 @@ const Payments = () => {
     // --- RENDER MODALES AUXILIARES ---
     function renderSessionsModal() {
         return (
-            // AUMENTÉ EL Z-INDEX A 200 PARA QUE ESTÉ POR ENCIMA DE TODO
             <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-2xl shadow-2xl h-[80vh] flex flex-col">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-bold flex items-center gap-2"><Clock size={20}/> Historial</h3>
+                        <h3 className="text-lg font-bold flex items-center gap-2"><Clock size={20}/> Seleccionar Día (Sesión)</h3>
                         <button onClick={() => setShowSessionsModal(false)} className="text-gray-400 hover:text-red-500"><X size={20}/></button>
                     </div>
                     
+                    {/* Filtros de Fecha */}
+                    <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl mb-4 flex gap-3 items-center">
+                        <span className="text-xs font-bold text-gray-500 uppercase">Filtrar Periodo:</span>
+                        <input type="date" value={historyFilters.desde} onChange={e=>setHistoryFilters({...historyFilters, desde: e.target.value})} className="p-1.5 border rounded-lg text-xs font-bold dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
+                        <span className="text-gray-400">-</span>
+                        <input type="date" value={historyFilters.hasta} onChange={e=>setHistoryFilters({...historyFilters, hasta: e.target.value})} className="p-1.5 border rounded-lg text-xs font-bold dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
+                        <button onClick={fetchSessionsHistory} className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"><Search size={16}/></button>
+                    </div>
+
                     <div className="overflow-y-auto flex-1 border rounded-xl dark:border-gray-700 relative">
                         {loadingHistory && (
                             <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex items-center justify-center z-10">
@@ -443,7 +507,7 @@ const Payments = () => {
                                     <th className="p-3">Apertura</th>
                                     <th className="p-3">Usuario</th>
                                     <th className="p-3 text-right">Saldo Final</th>
-                                    <th className="p-3 text-center">Detalle</th>
+                                    <th className="p-3 text-center">Ver Diario</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y dark:divide-gray-700">
@@ -453,13 +517,13 @@ const Payments = () => {
                                         <td className="p-3 font-medium">{s.usuario_nombre || `ID: ${s.usuario}`}</td>
                                         <td className="p-3 text-right font-bold">S/ {s.saldo_actual?.toFixed(2)}</td>
                                         <td className="p-3 text-center">
-                                            <button onClick={() => openSessionTimeline(s)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Eye size={16}/></button>
+                                            <button onClick={() => openSessionTimeline(s)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded tooltip" title="Ver Diario"><Eye size={16}/></button>
                                         </td>
                                     </tr>
                                 ))}
                                 {!loadingHistory && sessionsList.length === 0 && (
                                     <tr>
-                                        <td colSpan="4" className="p-8 text-center text-gray-400">No hay registros de cajas anteriores.</td>
+                                        <td colSpan="4" className="p-8 text-center text-gray-400">No hay registros en este periodo.</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -476,7 +540,12 @@ const Payments = () => {
             <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in">
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl h-[90vh] flex flex-col">
                     <div className="flex justify-between items-start mb-4 border-b pb-4 dark:border-gray-700">
-                        <h3 className="text-xl font-bold flex items-center gap-2"><FileText size={24}/> Diario Electrónico</h3>
+                        <div>
+                            <h3 className="text-xl font-bold flex items-center gap-2"><FileText size={24}/> Diario Electrónico</h3>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Sesión del: <span className="font-bold text-gray-800 dark:text-gray-200">{new Date(selectedSessionInfo.fecha_apertura).toLocaleString()}</span>
+                            </p>
+                        </div>
                         <button onClick={() => setShowTimelineModal(false)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full dark:bg-gray-700"><X size={20}/></button>
                     </div>
                     <div className="overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border dark:border-gray-700">
@@ -484,19 +553,32 @@ const Payments = () => {
                             <thead>
                                 <tr className="text-gray-400 text-xs uppercase font-bold border-b border-gray-200 dark:border-gray-700">
                                     <th className="pb-3 text-left">Hora</th>
-                                    <th className="pb-3 text-left">Evento</th>
-                                    <th className="pb-3 text-left">Descripción</th>
+                                    <th className="pb-3 text-left">Movimiento</th>
                                     <th className="pb-3 text-right">Monto</th>
+                                    <th className="pb-3 text-left pl-6">Usuario</th>
+                                    <th className="pb-3 text-center">Detalle</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700/50">
                                 {selectedSessionTimeline.map((ev, idx) => (
-                                    <tr key={idx} className={ev.estado === 'ANULADO' ? 'opacity-50 line-through' : ''}>
-                                        <td className="py-2 text-xs font-mono">{new Date(ev.fecha).toLocaleTimeString()}</td>
-                                        <td className="py-2 text-xs font-bold">{ev.tipo_evento}</td>
-                                        <td className="py-2">{ev.descripcion}</td>
-                                        <td className={`py-2 text-right font-mono ${ev.es_entrada ? 'text-emerald-600' : 'text-red-600'}`}>
-                                            {ev.es_entrada ? '+' : '-'} S/ {parseFloat(ev.monto).toFixed(2)}
+                                    <tr key={idx} className={`hover:bg-white dark:hover:bg-gray-800 ${ev.estado === 'ANULADO' ? 'opacity-50 line-through' : ''}`}>
+                                        <td className="py-3 text-xs font-mono text-gray-500">{new Date(ev.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                                        <td className="py-3">
+                                            <div className="font-bold text-xs">{ev.tipo_evento}</div>
+                                            <div className="text-xs text-gray-500">{ev.descripcion}</div>
+                                        </td>
+                                        <td className={`py-3 text-right font-mono font-bold ${ev.es_entrada ? 'text-emerald-600' : 'text-red-600'}`}>
+                                            {ev.es_entrada === null ? '' : (ev.es_entrada ? '+' : '-')} S/ {parseFloat(ev.monto).toFixed(2)}
+                                        </td>
+                                        <td className="py-3 pl-6 text-xs font-medium">{ev.usuario}</td>
+                                        <td className="py-3 text-center">
+                                            <button 
+                                                onClick={() => openTransactionDetail(ev)}
+                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Ver Detalle"
+                                            >
+                                                <Eye size={16}/>
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -506,6 +588,140 @@ const Payments = () => {
                 </div>
             </div>
         );
+    }
+
+    function renderDetailModal() {
+        if (!showDetailModal || !detailContent) return null;
+        
+        return (
+            <div className="fixed inset-0 z-[350] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl relative">
+                    <button onClick={() => setShowDetailModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={18}/></button>
+                    
+                    <h3 className="text-lg font-bold mb-1 flex items-center gap-2">
+                        {detailContent.tipo_evento === 'VENTA' ? <CreditCard size={18} className="text-blue-500"/> : 
+                         detailContent.tipo_evento === 'APERTURA' ? <Unlock size={18} className="text-emerald-500"/> :
+                         <FileText size={18} className="text-gray-500"/>}
+                        Detalle de Transacción
+                    </h3>
+                    <p className="text-xs text-gray-400 mb-4 font-mono">{new Date(detailContent.fecha).toLocaleString()}</p>
+                    
+                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 mb-4 border dark:border-gray-700">
+                        {detailContent.detalles && Object.keys(detailContent.detalles).length > 0 ? (
+                            <ul className="space-y-2 text-sm">
+                                {Object.entries(detailContent.detalles).map(([key, value]) => (
+                                    <li key={key} className="flex justify-between border-b border-gray-100 dark:border-gray-800 last:border-0 pb-1 last:pb-0">
+                                        <span className="font-bold text-gray-500 text-xs uppercase">{key}:</span>
+                                        <span className="font-mono font-medium dark:text-gray-200">
+                                            {typeof value === 'number' ? `S/ ${value.toFixed(2)}` : value}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-center text-gray-400 text-xs italic">Sin detalles adicionales registrados.</p>
+                        )}
+                    </div>
+                    
+                    <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700">
+                         <span className="text-xs font-bold uppercase text-gray-500">Monto Total</span>
+                         <span className="text-xl font-black text-gray-800 dark:text-white">S/ {parseFloat(detailContent.monto).toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
+    // --- NUEVO: MODAL REGISTRO MANUAL ---
+    function renderMovimientoModal() {
+        return (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                         <Wallet size={20}/> Registrar {movimientoForm.tipo === 'INGRESO' ? 'Ingreso' : 'Gasto'}
+                    </h3>
+                    
+                    <div className="flex bg-gray-100 p-1 rounded-lg mb-4 dark:bg-gray-700">
+                        <button 
+                            onClick={()=>setMovimientoForm({...movimientoForm, tipo: 'INGRESO'})}
+                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${movimientoForm.tipo === 'INGRESO' ? 'bg-white shadow text-emerald-600 dark:bg-gray-600 dark:text-emerald-400' : 'text-gray-500'}`}
+                        >
+                            INGRESO (+)
+                        </button>
+                        <button 
+                             onClick={()=>setMovimientoForm({...movimientoForm, tipo: 'EGRESO'})}
+                             className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${movimientoForm.tipo === 'EGRESO' ? 'bg-white shadow text-red-600 dark:bg-gray-600 dark:text-red-400' : 'text-gray-500'}`}
+                        >
+                            GASTO (-)
+                        </button>
+                    </div>
+
+                    <div className="space-y-3 mb-6">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Categoría</label>
+                            <input 
+                                list="categorias" 
+                                className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold dark:bg-gray-900 dark:border-gray-600"
+                                value={movimientoForm.categoria}
+                                onChange={e => setMovimientoForm({...movimientoForm, categoria: e.target.value})}
+                                placeholder="Ej. Proveedor, Personal, Vuelto..."
+                            />
+                            <datalist id="categorias">
+                                <option value="PAGO PROVEEDOR"/>
+                                <option value="PAGO PERSONAL"/>
+                                <option value="SERVICIOS"/>
+                                <option value="SOBRANTE CAJA"/>
+                                <option value="OTROS"/>
+                            </datalist>
+                        </div>
+                        
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Monto</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-gray-400 text-xs">S/</span>
+                                <input 
+                                    type="number" 
+                                    className="w-full pl-8 p-2 bg-gray-50 border rounded-lg text-sm font-bold dark:bg-gray-900 dark:border-gray-600"
+                                    value={movimientoForm.monto}
+                                    onChange={e => setMovimientoForm({...movimientoForm, monto: e.target.value})}
+                                    placeholder="0.00"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Método de Pago</label>
+                            <select 
+                                className="w-full p-2 bg-gray-50 border rounded-lg text-sm font-bold dark:bg-gray-900 dark:border-gray-600"
+                                value={movimientoForm.metodo_pago}
+                                onChange={e => setMovimientoForm({...movimientoForm, metodo_pago: e.target.value})}
+                            >
+                                <option value="EFECTIVO">EFECTIVO</option>
+                                <option value="YAPE">YAPE</option>
+                                <option value="PLIN">PLIN</option>
+                                <option value="TARJETA">TARJETA</option>
+                                <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Nota (Opcional)</label>
+                            <textarea 
+                                className="w-full p-2 bg-gray-50 border rounded-lg text-sm dark:bg-gray-900 dark:border-gray-600 h-16 resize-none"
+                                value={movimientoForm.descripcion}
+                                onChange={e => setMovimientoForm({...movimientoForm, descripcion: e.target.value})}
+                                placeholder="Detalles adicionales..."
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button onClick={()=>setShowMovimientoModal(false)} className="flex-1 bg-gray-100 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-200 dark:bg-gray-700">Cancelar</button>
+                        <button onClick={handleRegisterMovimiento} className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-black">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        )
     }
 
     // --- VISTA PRINCIPAL ---
@@ -522,7 +738,7 @@ const Payments = () => {
                 </div>
                 <div className="flex gap-2">
                     <button onClick={openSessionsHistory} className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-50 flex gap-2 items-center shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700">
-                        <Clock size={16}/> Historial
+                        <Clock size={16}/> Historial / Diario
                     </button>
                     <button onClick={() => setShowCerrar(true)} className="bg-gray-900 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-black flex gap-2 items-center shadow-lg">
                         <Lock size={16}/> Cerrar Caja
@@ -577,22 +793,34 @@ const Payments = () => {
                     <p className="text-xs text-gray-400 mt-1">Acumulado Tickets</p>
                 </div>
 
-                {/* 3. Otros Movimientos */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-center h-36">
-                    <div className="flex justify-between items-center mb-2">
-                        <p className="text-gray-400 text-[10px] font-bold uppercase">Salidas / Gastos</p>
-                        <ArrowDownLeft className="text-red-500 opacity-50" size={24}/>
+                {/* 3. Otros Movimientos (Ahora con botón Ingreso/Gasto) */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-36 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-50"><ArrowDownLeft className="text-purple-500" size={24}/></div>
+                    
+                    <div>
+                        <p className="text-gray-400 text-[10px] font-bold uppercase mb-1">Ingresos / Gastos</p>
+                        <div className="flex items-baseline gap-2">
+                             <span className="text-2xl font-black text-gray-900 dark:text-white">
+                                {((caja?.total_gastos || 0) > 0 ? '-' : '')} S/ {caja?.total_gastos?.toFixed(2) ?? '0.00'}
+                             </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400">Movimientos Manuales</p>
                     </div>
-                    <p className="text-3xl font-black text-red-600">S/ {caja?.total_gastos?.toFixed(2) ?? '0.00'}</p>
-                    <p className="text-xs text-gray-400 mt-1">Movimientos Manuales</p>
+
+                    <button 
+                        onClick={() => setShowMovimientoModal(true)}
+                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-colors dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                    >
+                        <PlusCircle size={14}/> Registrar Movimiento
+                    </button>
                 </div>
             </div>
 
-            {/* Toolbar Filtros */}
+            {/* Toolbar Filtros Tickets */}
             <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 mb-4 flex gap-3 flex-wrap items-center">
                 <div className="flex-1 min-w-[200px] relative">
                     <Search className="absolute left-3 top-2.5 text-gray-400" size={18}/>
-                    <input type="text" placeholder="Buscar..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border rounded-lg text-sm outline-none dark:border-gray-700"/>
+                    <input type="text" placeholder="Buscar ticket..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border rounded-lg text-sm outline-none dark:border-gray-700"/>
                 </div>
                 
                 <div className="flex gap-2 items-center">
@@ -609,7 +837,7 @@ const Payments = () => {
                 <button onClick={() => {fetchCaja(); fetchTableData();}} className="p-2 bg-gray-100 rounded-lg dark:bg-gray-700"><RefreshCw size={18}/></button>
             </div>
 
-            {/* Tabla */}
+            {/* Tabla Principal (Tickets) */}
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex-1 flex flex-col overflow-hidden">
                 <div className="overflow-x-auto flex-1">
                     <table className="w-full text-left">
@@ -643,7 +871,6 @@ const Payments = () => {
                                         {t.saldo_pendiente > 0 ? (
                                             <button onClick={() => { setSelectedTicket(t); setPayAmount(t.saldo_pendiente); setShowPayModal(true); }} className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg tooltip" title="Cobrar"><DollarSign size={16}/></button>
                                         ) : (
-                                            /* EXTORNO CONDICIONAL: Solo si tiene pagos de hoy */
                                             t.es_extornable && (
                                                 <button onClick={() => confirmExtorno(t)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg tooltip" title="Extornar"><RotateCcw size={16}/></button>
                                             )
@@ -755,6 +982,12 @@ const Payments = () => {
                     </div>
                  </div>
             )}
+
+            {/* MODALES GLOBALES */}
+            {showSessionsModal && renderSessionsModal()}
+            {showTimelineModal && renderTimelineModal()}
+            {showDetailModal && renderDetailModal()}
+            {showMovimientoModal && renderMovimientoModal()}
         </div>
     );
 };
