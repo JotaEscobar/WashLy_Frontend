@@ -3,7 +3,7 @@ import {
     Wallet, Search, ArrowUpRight, ArrowDownLeft, 
     DollarSign, CreditCard, Lock, RotateCcw, 
     RefreshCw, X, Clock, FileText, Calendar, User, Eye, AlertTriangle,
-    CheckCircle // <--- IMPORT FALTANTE AGREGADO
+    CheckCircle, Unlock, ArrowDownCircle
 } from 'lucide-react';
 import api from '../api/axiosConfig';
 
@@ -29,6 +29,7 @@ const Payments = () => {
     const [showPayModal, setShowPayModal] = useState(false);
     const [showExtornoModal, setShowExtornoModal] = useState(false);
     const [showCerrar, setShowCerrar] = useState(false);
+    const [showConfirmAbrir, setShowConfirmAbrir] = useState(false); // Modal confirmación apertura
 
     // Modales Historial
     const [showSessionsModal, setShowSessionsModal] = useState(false);
@@ -38,7 +39,10 @@ const Payments = () => {
     const [selectedSessionInfo, setSelectedSessionInfo] = useState(null);
     
     // Formularios
-    const [montoInicial, setMontoInicial] = useState('');
+    const [aperturaValues, setAperturaValues] = useState({
+        EFECTIVO: '', YAPE: '', PLIN: '', TARJETA: ''
+    });
+    
     const [payAmount, setPayAmount] = useState('');
     const [payMethod, setPayMethod] = useState('EFECTIVO');
     
@@ -89,16 +93,60 @@ const Payments = () => {
     useEffect(() => { if(caja) fetchTableData(); }, [searchTerm, statusFilter, fechaDesde, fechaHasta]);
 
     // --- ACCIONES DE CAJA ---
-    const handleAbrir = async () => {
-        if(!montoInicial) return alert("Ingrese monto inicial");
+    
+    // 1. Importar último cierre
+    const handleImportarCierre = async (e) => {
+        if (!e.target.checked) return; // Si desmarca, no hacemos nada (o podríamos limpiar)
+
         try {
-            const res = await api.post('pagos/caja/abrir/', { monto_inicial: montoInicial });
-            setCaja(res.data);
-            fetchTableData();
-        } catch (e) { alert(e.response?.data?.error || "Error al abrir"); }
+            const res = await api.get('pagos/caja/ultimo_cierre/');
+            if (!res.data) {
+                alert("No se encontró un cierre anterior.");
+                e.target.checked = false;
+                return;
+            }
+            
+            setAperturaValues({
+                EFECTIVO: res.data.EFECTIVO || 0,
+                YAPE: res.data.detalle?.YAPE || 0,
+                PLIN: res.data.detalle?.PLIN || 0,
+                TARJETA: res.data.detalle?.TARJETA || 0
+            });
+            
+        } catch (error) {
+            console.error("Error importando cierre", error);
+            alert("Error al obtener datos del último cierre.");
+        }
     };
 
-    // --- NUEVA FUNCIÓN: AUTOCOMPLETAR ---
+    // 2. Ejecutar Apertura
+    const confirmarApertura = async () => {
+        const montoEfectivo = parseFloat(aperturaValues.EFECTIVO) || 0;
+        
+        // El resto de medios se van al detalle_apertura
+        const detalle = {
+            YAPE: parseFloat(aperturaValues.YAPE) || 0,
+            PLIN: parseFloat(aperturaValues.PLIN) || 0,
+            TARJETA: parseFloat(aperturaValues.TARJETA) || 0
+        };
+
+        if(montoEfectivo < 0) return alert("El monto no puede ser negativo");
+
+        try {
+            const res = await api.post('pagos/caja/abrir/', { 
+                monto_inicial: montoEfectivo, 
+                detalle_apertura: detalle      
+            });
+            setCaja(res.data);
+            setShowConfirmAbrir(false);
+            fetchTableData();
+        } catch (e) { 
+            setShowConfirmAbrir(false);
+            alert(e.response?.data?.error || "Error al abrir"); 
+        }
+    };
+
+    // --- NUEVA FUNCIÓN: AUTOCOMPLETAR CIERRE ---
     const handleAutoFillCierre = (e) => {
         if (e.target.checked && caja?.desglose_pagos) {
             setCierreDetalle(prev => ({
@@ -109,9 +157,6 @@ const Payments = () => {
                 TARJETA: caja.desglose_pagos.TARJETA || 0,
                 TRANSFERENCIA: caja.desglose_pagos.TRANSFERENCIA || 0
             }));
-        } else {
-            // Opcional: Limpiar si se desmarca, o dejarlo como está.
-            // Aquí lo dejaremos con los valores actuales para permitir edición manual posterior.
         }
     };
 
@@ -131,7 +176,8 @@ const Payments = () => {
         try {
             await api.post(`pagos/caja/${caja.id}/cerrar/`, { 
                 monto_real: totalReal,
-                comentarios: comentarioFinal
+                comentarios: comentarioFinal,
+                detalle_cierre: cierreDetalle // Enviamos también el objeto estructurado
             });
             setCaja(null);
             setShowCerrar(false);
@@ -160,7 +206,6 @@ const Payments = () => {
             setShowPayModal(false);
             setPayAmount('');
             
-            // Feedback con Modal en lugar de Alert
             setInfoModal({ 
                 show: true, 
                 title: 'Pago Exitoso', 
@@ -173,7 +218,6 @@ const Payments = () => {
             
         } catch (error) {
             const msg = error.response?.data?.error || "Error al realizar el pago";
-            // Feedback de Error con Modal
             setInfoModal({ show: true, title: 'Error de Pago', message: msg, type: 'error' });
         }
     };
@@ -188,7 +232,6 @@ const Payments = () => {
             const res = await api.get(`pagos/?search=${selectedTicket.numero_ticket}`);
             const pagos = res.data.results || res.data;
             
-            // Usar fecha local YYYY-MM-DD para evitar errores de timezone con toISOString()
             const hoy = new Date().toLocaleDateString('en-CA'); 
             const pagoExtornable = pagos.find(p => p.estado === 'PAGADO' && p.fecha_pago.startsWith(hoy));
 
@@ -197,7 +240,6 @@ const Payments = () => {
                 return alert("No hay pago válido de HOY para extornar.");
             }
 
-            // CORRECCIÓN URL: Quitamos '/lista' que estaba sobrando
             await api.post(`pagos/${pagoExtornable.id}/anular/`);
             
             setShowExtornoModal(false);
@@ -247,20 +289,80 @@ const Payments = () => {
     if (!caja) {
         return (
             <div className="h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl max-w-sm w-full text-center border border-gray-200 dark:border-gray-700">
-                    <div className="mx-auto w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-4"><Lock size={32}/></div>
-                    <h1 className="text-xl font-black mb-2 dark:text-white">Caja Cerrada</h1>
-                    <p className="text-gray-500 text-sm mb-6">Monto de apertura.</p>
-                    <input 
-                        type="number" value={montoInicial} onChange={e => setMontoInicial(e.target.value)}
-                        className="w-full p-3 text-lg font-bold border rounded-xl mb-4 text-center dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        placeholder="S/ 0.00"
-                    />
-                    <button onClick={handleAbrir} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold">Abrir Caja</button>
-                    <div className="mt-4">
-                         <button onClick={openSessionsHistory} className="text-sm text-gray-500 hover:underline flex items-center justify-center gap-1"><Clock size={14}/> Historial de Cajas</button>
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl max-w-lg w-full border border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-col items-center mb-6">
+                        <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4"><Unlock size={32}/></div>
+                        <h1 className="text-xl font-black dark:text-white">Apertura de Caja</h1>
+                        <p className="text-gray-500 text-sm">Ingrese los saldos iniciales para comenzar.</p>
+                    </div>
+
+                    {/* CHECKBOX IMPORTAR */}
+                    <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex items-center gap-3 border border-blue-100 dark:border-blue-800">
+                        <input 
+                            type="checkbox" 
+                            id="importarCierre" 
+                            onChange={handleImportarCierre}
+                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                        <label htmlFor="importarCierre" className="text-sm font-bold text-blue-700 dark:text-blue-300 cursor-pointer select-none flex-1 flex items-center gap-2">
+                             <ArrowDownCircle size={16}/> Importar saldos del último cierre
+                        </label>
+                    </div>
+
+                    {/* FORMULARIO GRID - ESTILO UNIFICADO */}
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                        {[
+                            { id: 'EFECTIVO', label: 'Efectivo', icon: DollarSign },
+                            { id: 'YAPE', label: 'Yape', icon: CreditCard },
+                            { id: 'PLIN', label: 'Plin', icon: CreditCard },
+                            { id: 'TARJETA', label: 'Tarjeta', icon: CreditCard },
+                        ].map((field) => (
+                             <div key={field.id} className="relative">
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">{field.label}</label>
+                                <div className="relative">
+                                    <field.icon className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                                    <input 
+                                        type="number" 
+                                        value={aperturaValues[field.id]} 
+                                        onChange={e => setAperturaValues({...aperturaValues, [field.id]: e.target.value})}
+                                        className="w-full pl-9 pr-3 py-2 bg-gray-50 border rounded-xl font-bold text-gray-900 dark:bg-gray-900 dark:border-gray-600 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        placeholder="0.00"
+                                        onFocus={(e) => e.target.select()}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button onClick={() => setShowConfirmAbrir(true)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all">
+                        Abrir Turno
+                    </button>
+                    
+                    <div className="mt-6 border-t pt-4 dark:border-gray-700 text-center">
+                         <button onClick={openSessionsHistory} className="text-sm text-gray-500 hover:text-emerald-600 hover:underline flex items-center justify-center gap-2 mx-auto">
+                            <Clock size={14}/> Ver Historial de Cajas
+                        </button>
                     </div>
                 </div>
+
+                {/* MODAL CONFIRMACIÓN APERTURA */}
+                {showConfirmAbrir && (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl text-center">
+                            <h3 className="text-lg font-bold mb-4 dark:text-white">Confirmar Apertura</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                                Se abrirá la caja con los siguientes saldos:<br/>
+                                <span className="font-bold text-emerald-600">Efectivo: S/ {parseFloat(aperturaValues.EFECTIVO || 0).toFixed(2)}</span><br/>
+                                <span className="text-xs">Otros: S/ {(parseFloat(aperturaValues.YAPE || 0) + parseFloat(aperturaValues.PLIN || 0) + parseFloat(aperturaValues.TARJETA || 0)).toFixed(2)}</span>
+                            </p>
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowConfirmAbrir(false)} className="flex-1 bg-gray-100 py-2 rounded-lg font-bold dark:bg-gray-700 dark:text-white">Cancelar</button>
+                                <button onClick={confirmarApertura} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-bold">Sí, Abrir</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {showSessionsModal && renderSessionsModal()}
                 {showTimelineModal && renderTimelineModal()}
             </div>
@@ -290,13 +392,19 @@ const Payments = () => {
                                 {sessionsList.map(s => (
                                     <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                         <td className="p-3 text-xs">{new Date(s.fecha_apertura).toLocaleString()}</td>
-                                        <td className="p-3 font-medium">{s.usuario}</td>
+                                        {/* CORREGIDO: Usamos usuario_nombre en lugar de usuario (ID) */}
+                                        <td className="p-3 font-medium">{s.usuario_nombre || `ID: ${s.usuario}`}</td>
                                         <td className="p-3 text-right font-bold">S/ {s.saldo_actual?.toFixed(2)}</td>
                                         <td className="p-3 text-center">
                                             <button onClick={() => openSessionTimeline(s)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Eye size={16}/></button>
                                         </td>
                                     </tr>
                                 ))}
+                                {sessionsList.length === 0 && (
+                                    <tr>
+                                        <td colSpan="4" className="p-8 text-center text-gray-400">No hay registros de cajas anteriores.</td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -352,7 +460,7 @@ const Payments = () => {
                     <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
                         <Wallet className="text-emerald-500"/> Gestión de Caja
                     </h1>
-                    <p className="text-gray-500 text-xs">Cajero: <strong>{caja?.usuario}</strong></p>
+                    <p className="text-gray-500 text-xs">Cajero: <strong>{caja?.usuario_nombre || caja?.usuario}</strong></p>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={openSessionsHistory} className="bg-white text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-50 flex gap-2 items-center shadow-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700">
@@ -559,7 +667,7 @@ const Payments = () => {
                             {/* CHECKBOX AUTOCOMPLETAR */}
                             <label className="flex items-center gap-2 text-sm text-blue-600 font-bold cursor-pointer hover:text-blue-700">
                                 <input type="checkbox" onChange={handleAutoFillCierre} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
-                                Cuadrar Perfecto (Copiar Sistema)
+                                Autocompletar con saldos del sistema
                             </label>
                         </div>
                         
@@ -635,4 +743,4 @@ const Payments = () => {
     );
 };
 
-export default Payments;
+export default Payments
