@@ -4,7 +4,9 @@ import MainLayout from './layouts/MainLayout';
 import Login from './pages/Login';
 import POS from './pages/POS';
 import Tickets from './pages/Tickets';
-import Payments from './pages/Payments'; // <--- 1. IMPORTAR
+import Payments from './pages/Payments';
+import Clients from './pages/Clients'; // <--- 1. IMPORTANTE: Importar el nuevo archivo
+import Inventory from './pages/Inventory';
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }) => {
@@ -24,14 +26,12 @@ function App() {
                     <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                         <Route path="/pos" element={<POS />} />
                         <Route path="/tickets" element={<Tickets />} />
-                        <Route path="/pagos" element={<Payments />} /> 
+                        <Route path="/pagos" element={<Payments />} />
+                        <Route path="/clientes" element={<Clients />} /> 
                         <Route path="/dashboard" element={<div className="text-2xl font-bold p-6">Bienvenido al Dashboard</div>} />
-                        
-                        {/* Rutas placeholder */}
-                        <Route path="/inventario" element={<div className="p-6 font-bold">Módulo de Inventario (Próximamente)</div>} />
-                        <Route path="/clientes" element={<div className="p-6 font-bold">Módulo de Clientes (Próximamente)</div>} />
+                        <Route path="/inventario" element={<Inventory />} />
                         <Route path="/config" element={<div className="p-6 font-bold">Configuración (Próximamente)</div>} />
-
+                        
                         <Route path="/" element={<Navigate to="/pos" />} />
                     </Route>
                 </Routes>
