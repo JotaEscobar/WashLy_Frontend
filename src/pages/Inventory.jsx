@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Package, ArrowUpCircle, ArrowDownCircle, AlertTriangle, History, Save, X, Filter } from 'lucide-react';
+import { Search, ArrowUpCircle, ArrowDownCircle, AlertTriangle, History, X } from 'lucide-react';
 import api from '../api/axiosConfig';
 
 const Inventory = () => {
@@ -67,6 +67,7 @@ const Inventory = () => {
             setShowModal(false);
             fetchData(); // Recargar stock
         } catch (error) {
+            // Ahora mostrará el mensaje de validación del serializer si falta stock
             alert("Error: " + JSON.stringify(error.response?.data));
         }
     };
