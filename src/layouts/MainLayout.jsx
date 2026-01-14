@@ -50,13 +50,57 @@ const MainLayout = () => {
 
                 {/* Navegación */}
                 <nav className="flex-1 p-3 space-y-1 overflow-y-auto mt-2">
-                    <NavItem icon={<LayoutDashboard size={20}/>} label="Dashboard" isOpen={isSidebarOpen} active={location.pathname === '/'} onClick={() => navigate('/')}/>
-                    <NavItem icon={<Home size={20}/>} label="Punto de Venta" isOpen={isSidebarOpen} active={location.pathname === '/pos'} onClick={() => navigate('/pos')}/>
-                    <NavItem icon={<Package size={20}/>} label="Tickets" isOpen={isSidebarOpen} active={location.pathname === '/tickets'} onClick={() => navigate('/tickets')}/>
-                    <NavItem icon={<CreditCard size={20}/>} label="Pagos" isOpen={isSidebarOpen} active={location.pathname === '/pagos'} onClick={() => navigate('/pagos')}/>
-                    <NavItem icon={<Box size={20}/>} label="Inventario" isOpen={isSidebarOpen} active={location.pathname === '/inventario'} onClick={() => navigate('/inventario')}/>
-                    <NavItem icon={<Users size={20}/>} label="Clientes" isOpen={isSidebarOpen} active={location.pathname === '/clientes'} onClick={() => navigate('/clientes')}/>
-                    <NavItem icon={<Settings size={20}/>} label="Configuración" isOpen={isSidebarOpen} active={location.pathname === '/config'} onClick={() => navigate('/config')}/>
+                    <NavItem 
+                        icon={<LayoutDashboard size={20}/>} 
+                        label="Dashboard" 
+                        isOpen={isSidebarOpen} 
+                        active={location.pathname === '/dashboard' || location.pathname === '/'} 
+                        onClick={() => navigate('/dashboard')}
+                    />
+                    <NavItem 
+                        icon={<Home size={20}/>} 
+                        label="Punto de Venta" 
+                        isOpen={isSidebarOpen} 
+                        active={location.pathname === '/pos'} 
+                        onClick={() => navigate('/pos')}
+                    />
+                    <NavItem 
+                        icon={<Package size={20}/>} 
+                        label="Tickets" 
+                        isOpen={isSidebarOpen} 
+                        active={location.pathname === '/tickets'} 
+                        onClick={() => navigate('/tickets')}
+                    />
+                    <NavItem 
+                        icon={<CreditCard size={20}/>} 
+                        label="Pagos" 
+                        isOpen={isSidebarOpen} 
+                        active={location.pathname === '/pagos'} 
+                        onClick={() => navigate('/pagos')}
+                    />
+                    <NavItem 
+                        icon={<Box size={20}/>} 
+                        label="Inventario" 
+                        isOpen={isSidebarOpen} 
+                        active={location.pathname === '/inventario'} 
+                        onClick={() => navigate('/inventario')}
+                    />
+                    <NavItem 
+                        icon={<Users size={20}/>} 
+                        label="Clientes" 
+                        isOpen={isSidebarOpen} 
+                        active={location.pathname === '/clientes'} 
+                        onClick={() => navigate('/clientes')}
+                    />
+                    <div className="pt-4 mt-4 border-t border-gray-100 dark:border-gray-700">
+                        <NavItem 
+                            icon={<Settings size={20}/>} 
+                            label="Configuración" 
+                            isOpen={isSidebarOpen} 
+                            active={location.pathname === '/config'} 
+                            onClick={() => navigate('/config')}
+                        />
+                    </div>
                 </nav>
 
                 {/* Footer */}
