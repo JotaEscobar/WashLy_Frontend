@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle, Lock, Ban } from 'lucide-react';
+import { Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle, Lock, Ban, Truck, MessageSquare } from 'lucide-react';
 import api from '../api/axiosConfig';
 import { useNavigate } from 'react-router-dom';
 
@@ -209,9 +209,7 @@ const Tickets = () => {
 
     const executePayment = async () => {
         setActionLoading(true);
-        
         try {
-            // 1. Petición al Backend (Ruta corregida a 'pagos/')
             await api.post('pagos/', {
                 ticket: selectedTicket.id,
                 monto: parseFloat(payAmount),
@@ -220,41 +218,31 @@ const Tickets = () => {
                 origen: 'TICKETS'
             });
 
-            // 2. Éxito: Cerrar modales y mostrar Toast
-            setShowPayModal(false);     // Cierra el modal de ingreso de monto
+            setShowPayModal(false);
             setPayAmount('');
-            
-            // Cerramos el modal de confirmación
             setModalConfig({ ...modalConfig, show: false });
-            
-            // Mostramos el mensaje flotante de éxito (Toast ya implementado en tu JSX)
             setSuccessMsg('Pago registrado correctamente');
 
-            // 3. Recargar datos
             setTimeout(() => {
-                setSuccessMsg(''); // Limpiar mensaje
-                handleViewDetails(selectedTicket.id); // Recargar detalle ticket
-                fetchTickets(); // Recargar tabla
+                setSuccessMsg(''); 
+                handleViewDetails(selectedTicket.id);
+                fetchTickets();
             }, 1500);
 
         } catch (error) {
-            console.error(error);
             const serverError = error.response?.data?.error || error.response?.data?.detail || "No se pudo procesar el pago.";
-            
-            // 3. Error: Reutilizamos el Modal para mostrar el error (Feedback visual profesional)
             setModalConfig({ 
                 show: true, 
                 title: 'No se pudo pagar', 
-                message: serverError, // Ej: "No tienes una caja abierta"
+                message: serverError,
                 type: 'error', 
                 confirmText: 'Entendido',
-                action: null // Al ser null, el botón cerrará el modal
+                action: null 
             });
         } finally {
             setActionLoading(false);
         }
     };
-
 
     const onRegisterPaymentClick = () => {
         if (!payAmount || parseFloat(payAmount) <= 0) return showAlert('Monto Inválido', 'Ingrese un monto mayor a 0.', 'warning');
@@ -485,8 +473,8 @@ const Tickets = () => {
                             </div>
                         )}
 
-                        {/* Header Modal */}
-                        <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start bg-gray-50 dark:bg-gray-900/50">
+                        {/* Header Modal - LIMPIO */}
+                        <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                                     Ticket {selectedTicket.numero_ticket}
@@ -497,14 +485,18 @@ const Tickets = () => {
                                     {selectedTicket.cliente_info?.nombre_completo}
                                 </div>
                                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                    <span className="flex items-center gap-1"><Clock size={14}/> Entrega: {new Date(selectedTicket.fecha_prometida).toLocaleString()}</span>
+                                     <span className="flex items-center gap-1"><Clock size={14}/> Entrega: {new Date(selectedTicket.fecha_prometida).toLocaleString()}</span>
                                 </div>
                             </div>
                             <button onClick={() => setSelectedTicket(null)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
                         </div>
 
-                        <div className="p-6 overflow-y-auto flex-1 space-y-6 relative">
+                        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                            
+                            {/* Row 1: Gestión de Estado y Finanzas */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                
+                                {/* Gestión de Estado */}
                                 <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50 relative">
                                     <h3 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-3 flex items-center gap-2">Gestión de Estado</h3>
                                     
@@ -549,6 +541,7 @@ const Tickets = () => {
                                     )}
                                 </div>
 
+                                {/* Finanzas */}
                                 <div className="bg-gray-50 dark:bg-gray-700/20 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
                                     <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-3 flex items-center gap-2"><Wallet size={14}/> Finanzas</h3>
                                     <div className="flex justify-between items-end">
@@ -586,21 +579,65 @@ const Tickets = () => {
                                 </div>
                             </div>
 
-                            <div className="border rounded-xl overflow-hidden dark:border-gray-700">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-gray-100 dark:bg-gray-700 dark:text-gray-200">
-                                        <tr><th className="p-2 text-left">Cant.</th><th className="p-2 text-left">Prenda / Servicio</th><th className="p-2 text-right">Subtotal</th></tr>
-                                    </thead>
-                                    <tbody className="divide-y dark:divide-gray-700 dark:text-gray-300">
-                                        {selectedTicket.items?.map(item => (
-                                            <tr key={item.id}>
-                                                <td className="p-2 font-bold w-16 text-center">{item.cantidad}</td>
-                                                <td className="p-2"><span className="font-bold">{item.prenda_nombre || 'Item'}</span> - {item.servicio_nombre} <div className="text-xs text-gray-400 italic">{item.descripcion}</div></td>
-                                                <td className="p-2 text-right">S/ {item.subtotal}</td>
+                            {/* Row 2: Tabla de Prendas y Detalles de Entrega (SIMETRICO 50/50) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                
+                                {/* Lado Izquierdo: Tabla de Items */}
+                                <div className="border rounded-xl overflow-hidden dark:border-gray-700 h-full">
+                                    <div className="bg-gray-100 dark:bg-gray-700/50 p-2 text-xs font-bold text-gray-500 uppercase border-b dark:border-gray-700">
+                                        Detalle de Prendas
+                                    </div>
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300">
+                                            <tr>
+                                                <th className="p-2 text-left w-12 text-center">Cant.</th>
+                                                <th className="p-2 text-left">Prenda / Servicio</th>
+                                                <th className="p-2 text-right">Importe</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y dark:divide-gray-700 dark:text-gray-300">
+                                            {selectedTicket.items?.map(item => (
+                                                <tr key={item.id}>
+                                                    <td className="p-2 font-bold w-12 text-center">{item.cantidad}</td>
+                                                    <td className="p-2">
+                                                        <span className="font-bold">{item.prenda_nombre || 'Item'}</span>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">{item.servicio_nombre}</div>
+                                                        {item.descripcion && <div className="text-xs text-gray-400 italic">{item.descripcion}</div>}
+                                                    </td>
+                                                    <td className="p-2 text-right">S/ {item.subtotal}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Lado Derecho: Información de Entrega y Observaciones (SIMÉTRICO) */}
+                                <div className="border rounded-xl dark:border-gray-700 overflow-hidden h-full flex flex-col">
+                                    <div className="bg-gray-100 dark:bg-gray-700/50 p-2 text-xs font-bold text-gray-500 uppercase border-b dark:border-gray-700">
+                                        Información de Entrega
+                                    </div>
+                                    
+                                    <div className="p-4 flex flex-col gap-4 flex-1 bg-white dark:bg-gray-800">
+                                        
+                                        {/* Tipo de Entrega */}
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Tipo de Entrega</span>
+                                            <div className="font-bold text-gray-800 dark:text-gray-200 text-sm flex items-center gap-2">
+                                                <Truck size={16} className="text-blue-500"/>
+                                                {selectedTicket.tipo_entrega || 'Recojo en Local'}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Observaciones (Simplificado y Limpio) */}
+                                        <div className="flex-1">
+                                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Observaciones</span>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300 italic break-words">
+                                                {selectedTicket.observaciones || selectedTicket.notas || 'Sin observaciones.'}
+                                            </p>
+                                        </div>
+
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-center">

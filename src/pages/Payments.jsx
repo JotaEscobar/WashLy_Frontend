@@ -12,10 +12,15 @@ const Payments = () => {
     const [caja, setCaja] = useState(null);
     const [loading, setLoading] = useState(true);
     
+    // Configuración de FECHA LOCAL (Corrige el error de "mañana" por UTC)
+    // toLocaleDateString('en-CA') devuelve formato YYYY-MM-DD basado en la hora local del PC
+    const today = new Date().toLocaleDateString('en-CA');
+
     // Tabla y Filtros Tickets
     const [tickets, setTickets] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('TODOS');
+    // Inicializar con la fecha de hoy local
     const [fechaDesde, setFechaDesde] = useState('');
     const [fechaHasta, setFechaHasta] = useState('');
   
@@ -51,8 +56,8 @@ const Payments = () => {
     // --- MODAL DIARIO ELECTRONICO (HISTORIAL) ---
     const [showDiarioModal, setShowDiarioModal] = useState(false);
     const [loadingDiario, setLoadingDiario] = useState(false);
-    // Filtro por defecto: HOY
-    const today = new Date().toISOString().split('T')[0];
+    
+    // Filtro por defecto: HOY (Usando la variable today corregida)
     const [diarioFilters, setDiarioFilters] = useState({ desde: today, hasta: today });
     const [diarioEvents, setDiarioEvents] = useState([]);
     
@@ -349,15 +354,24 @@ const Payments = () => {
 
     const openDiarioModal = () => {
         setShowDiarioModal(true);
-        // Si no hay filtros, usar HOY por defecto
+        // Aseguramos que los filtros tengan valores válidos al abrir
         if (!diarioFilters.desde) setDiarioFilters({ desde: today, hasta: today });
-        fetchDiario();
+        // Fetch se llama en el useEffect o aquí si se desea forzar
+        // Pero como diarioFilters cambia (o se inicializa), es mejor llamarlo explícitamente:
+        setTimeout(() => fetchDiario(), 100); 
     };
     
     const openTransactionDetail = (item) => {
         setDetailContent(item);
         setShowDetailModal(true);
     };
+
+    // Efecto para recargar diario cuando cambian filtros, solo si el modal está abierto
+    useEffect(() => {
+        if (showDiarioModal) {
+            fetchDiario();
+        }
+    }, [diarioFilters]);
 
     // --- RENDERIZADO ---
     if (loading) {
@@ -470,44 +484,56 @@ const Payments = () => {
     }
 
     // --- MODAL DIARIO ELECTRONICO UNIFICADO ---
-    function renderDiarioModal() {
-        return (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-5xl shadow-2xl h-[90vh] flex flex-col">
-                    <div className="flex justify-between items-center mb-4 border-b pb-4 dark:border-gray-700">
-                        <div>
-                            <h3 className="text-xl font-bold flex items-center gap-2"><BookOpen size={24}/> Diario Electrónico</h3>
-                            <p className="text-xs text-gray-500 mt-1">Historial detallado de movimientos</p>
-                        </div>
-                        <button onClick={() => setShowDiarioModal(false)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full dark:bg-gray-700"><X size={20}/></button>
+function renderDiarioModal() {
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-5xl shadow-2xl h-[90vh] flex flex-col">
+                <div className="flex justify-between items-center mb-4 border-b pb-4 dark:border-gray-700">
+                    <div>
+                        <h3 className="text-xl font-bold flex items-center gap-2"><BookOpen size={24}/> Diario Electrónico</h3>
+                        <p className="text-xs text-gray-500 mt-1">Historial detallado de movimientos</p>
                     </div>
-                    
-                    {/* Filtros de Fecha */}
-                    <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl mb-4 flex gap-3 items-center">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Periodo:</span>
-                        <input type="date" value={diarioFilters.desde} onChange={e=>setDiarioFilters({...diarioFilters, desde: e.target.value})} className="p-2 border rounded-lg text-xs font-bold dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
-                        <span className="text-gray-400">-</span>
-                        <input type="date" value={diarioFilters.hasta} onChange={e=>setDiarioFilters({...diarioFilters, hasta: e.target.value})} className="p-2 border rounded-lg text-xs font-bold dark:bg-gray-800 dark:border-gray-700 dark:text-white"/>
-                        <button onClick={fetchDiario} className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 flex items-center gap-2"><Search size={14}/> Filtrar</button>
-                    </div>
+                    <button onClick={() => setShowDiarioModal(false)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full dark:bg-gray-700"><X size={20}/></button>
+                </div>
+                
+                {/* Filtros de Fecha */}
+                <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl mb-4 flex gap-3 items-center">
+                    <span className="text-xs font-bold text-gray-500 uppercase">Periodo:</span>
+                    <input 
+                        type="date" 
+                        value={diarioFilters.desde}
+                        onChange={(e) => setDiarioFilters({...diarioFilters, desde: e.target.value})}
+                        className="px-3 py-1.5 text-sm border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                    />
+                    <span className="text-gray-400">-</span>
+                    <input 
+                        type="date" 
+                        value={diarioFilters.hasta}
+                        onChange={(e) => setDiarioFilters({...diarioFilters, hasta: e.target.value})}
+                        className="px-3 py-1.5 text-sm border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                    />
+                    <button 
+                        onClick={fetchDiario}
+                        className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 flex items-center gap-2"
+                    >
+                        <Search size={16}/> Filtrar
+                    </button>
+                </div>
 
-                    <div className="overflow-y-auto flex-1 bg-gray-50 dark:bg-gray-900/50 rounded-xl p-0 border dark:border-gray-700 relative">
-                         {loadingDiario && (
-                            <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex items-center justify-center z-10">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-                            </div>
-                        )}
-                        
-                        <table className="w-full text-sm border-collapse">
-                            <thead className="bg-white dark:bg-gray-800 sticky top-0 z-10 shadow-sm">
-                                <tr className="text-gray-500 text-xs uppercase font-bold">
-                                    <th className="p-4 text-left w-32">Hora</th>
-                                    <th className="p-4 text-left">Movimiento</th>
-                                    <th className="p-4 text-right w-32">Monto</th>
-                                    <th className="p-4 text-left pl-8 w-40">Usuario</th>
-                                    <th className="p-4 text-center w-24">Detalle</th>
+                {/* Tabla de Movimientos */}
+                <div className="flex-1 overflow-auto rounded-xl border dark:border-gray-700">
+                    <div className="min-w-full">
+                        <table className="w-full">
+                            <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
+                                <tr>
+                                    <th className="p-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Hora</th>
+                                    <th className="p-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Movimiento</th>
+                                    <th className="p-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Monto</th>
+                                    <th className="p-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Usuario</th>
+                                    <th className="p-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Detalle</th>
                                 </tr>
                             </thead>
+                            
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700/50 bg-white dark:bg-gray-800">
                                 {diarioEvents.map((ev, idx) => (
                                     <tr key={idx} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${ev.estado === 'ANULADO' ? 'opacity-50 line-through' : ''}`}>
@@ -520,7 +546,8 @@ const Payments = () => {
                                         </td>
                                         
                                         <td className="p-4">
-                                            <div className="flex items-center gap-2 font-bold text-sm text-gray-800 dark:text-gray-200">
+                                            {/* CAMBIO: Quitar font-bold de la descripción */}
+                                            <div className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
                                                 {ev.tipo_evento === 'VENTA' && <div className="w-2 h-2 rounded-full bg-emerald-500"></div>}
                                                 {ev.tipo_evento === 'EGRESO' && <div className="w-2 h-2 rounded-full bg-red-500"></div>}
                                                 {ev.tipo_evento === 'INGRESO' && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
@@ -530,7 +557,8 @@ const Payments = () => {
                                             </div>
                                         </td>
                                         
-                                        <td className={`p-4 text-right font-mono font-bold text-sm ${
+                                        {/* CAMBIO: Quitar font-bold del monto */}
+                                        <td className={`p-4 text-right font-mono text-sm ${
                                             ev.es_entrada === true ? 'text-emerald-600' : 
                                             ev.es_entrada === false ? 'text-red-600' : 'text-gray-800 dark:text-gray-300'
                                         }`}>
@@ -562,50 +590,54 @@ const Payments = () => {
                     </div>
                 </div>
             </div>
-        );
-    }
+        </div>
+    );
+}
 
-    function renderDetailModal() {
-        if (!showDetailModal || !detailContent) return null;
-        
-        return (
-            <div className="fixed inset-0 z-[350] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl relative">
-                    <button onClick={() => setShowDetailModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={18}/></button>
-                    
-                    <h3 className="text-lg font-bold mb-1 flex items-center gap-2">
-                        {detailContent.tipo_evento === 'VENTA' ? <CreditCard size={18} className="text-blue-500"/> : 
-                         detailContent.tipo_evento === 'APERTURA' ? <Unlock size={18} className="text-emerald-500"/> :
-                         <FileText size={18} className="text-gray-500"/>}
-                        Detalle de Transacción
-                    </h3>
-                    <p className="text-xs text-gray-400 mb-4 font-mono">{new Date(detailContent.fecha).toLocaleString()}</p>
-                    
-                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 mb-4 border dark:border-gray-700">
-                        {detailContent.detalles && Object.keys(detailContent.detalles).length > 0 ? (
-                            <ul className="space-y-2 text-sm">
-                                {Object.entries(detailContent.detalles).map(([key, value]) => (
-                                    <li key={key} className="flex justify-between border-b border-gray-100 dark:border-gray-800 last:border-0 pb-1 last:pb-0">
-                                        <span className="font-bold text-gray-500 text-xs uppercase">{key}:</span>
-                                        <span className="font-mono font-medium dark:text-gray-200">
-                                            {typeof value === 'number' ? `S/ ${value.toFixed(2)}` : value}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <p className="text-center text-gray-400 text-xs italic">Sin detalles adicionales registrados.</p>
-                        )}
-                    </div>
-                    
-                    <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700">
-                         <span className="text-xs font-bold uppercase text-gray-500">Monto Total</span>
-                         <span className="text-xl font-black text-gray-800 dark:text-white">S/ {parseFloat(detailContent.monto).toFixed(2)}</span>
-                    </div>
+function renderDetailModal() {
+    if (!showDetailModal || !detailContent) return null;
+    
+    return (
+        <div className="fixed inset-0 z-[350] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl relative">
+                <button onClick={() => setShowDetailModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500"><X size={18}/></button>
+                
+                <h3 className="text-lg font-bold mb-1 flex items-center gap-2">
+                    {detailContent.tipo_evento === 'VENTA' ? <CreditCard size={18} className="text-blue-500"/> : 
+                     detailContent.tipo_evento === 'APERTURA' ? <Unlock size={18} className="text-emerald-500"/> :
+                     detailContent.tipo_evento === 'CIERRE' ? <Lock size={18} className="text-gray-500"/> :
+                     detailContent.tipo_evento === 'INGRESO' ? <ArrowUpRight size={18} className="text-blue-500"/> :
+                     detailContent.tipo_evento === 'EGRESO' ? <ArrowDownLeft size={18} className="text-red-500"/> :
+                     <FileText size={18} className="text-gray-500"/>}
+                    Detalle de Transacción
+                </h3>
+                <p className="text-xs text-gray-400 mb-4 font-mono">{new Date(detailContent.fecha).toLocaleString()}</p>
+                
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 mb-4 border dark:border-gray-700">
+                    {detailContent.detalles && Object.keys(detailContent.detalles).length > 0 ? (
+                        <ul className="space-y-2 text-sm">
+                            {Object.entries(detailContent.detalles).map(([key, value]) => (
+                                <li key={key} className="flex justify-between border-b border-gray-100 dark:border-gray-800 last:border-0 pb-1 last:pb-0">
+                                    <span className="font-bold text-gray-500 text-xs uppercase">{key}:</span>
+                                    <span className="font-mono text-gray-900 dark:text-gray-200">
+                                        {typeof value === 'number' ? `S/ ${value.toFixed(2)}` : value}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-center text-gray-400 text-xs italic">Sin detalles adicionales registrados.</p>
+                    )}
+                </div>
+                
+                <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700">
+                     <span className="text-xs font-bold uppercase text-gray-500">Monto Total</span>
+                     <span className="text-xl font-black text-gray-800 dark:text-white">S/ {parseFloat(detailContent.monto).toFixed(2)}</span>
                 </div>
             </div>
-        );
-    }
+        </div>
+    );
+}
     
     // --- NUEVO: MODAL REGISTRO MANUAL ---
     function renderMovimientoModal() {

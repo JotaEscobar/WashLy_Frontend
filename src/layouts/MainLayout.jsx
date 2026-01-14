@@ -1,16 +1,30 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Menu, Moon, Sun, Home, Package, Users, Settings, LogOut, X, LayoutDashboard, CreditCard, Box } from 'lucide-react';
 
 const MainLayout = () => {
     const [isSidebarOpen, setSidebarOpen] = useState(true);
-    const [isDarkMode, setIsDarkMode] = useState(false);
+    // Inicializar estado leyendo localStorage
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        return localStorage.getItem('theme') === 'dark';
+    });
+    
     const navigate = useNavigate();
     const location = useLocation();
 
+    // Efecto para aplicar el tema y guardar en localStorage
+    useEffect(() => {
+        if (isDarkMode) {
+            document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        }
+    }, [isDarkMode]);
+
     const toggleTheme = () => {
         setIsDarkMode(!isDarkMode);
-        document.documentElement.classList.toggle('dark');
     };
 
     return (
