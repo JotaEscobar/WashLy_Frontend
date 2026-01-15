@@ -7,7 +7,8 @@ import Tickets from './pages/Tickets';
 import Payments from './pages/Payments';
 import Clients from './pages/Clients'; 
 import Inventory from './pages/Inventory';
-import Dashboard from './pages/Dashboard'; // Importamos el componente real
+import Dashboard from './pages/Dashboard'; 
+import Settings from './pages/Setting';
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }) => {
@@ -31,7 +32,7 @@ function App() {
                         <Route path="/pagos" element={<Payments />} />
                         <Route path="/clientes" element={<Clients />} /> 
                         <Route path="/inventario" element={<Inventory />} />
-                        <Route path="/config" element={<div className="p-6 font-bold text-gray-500">Configuración (Próximamente)</div>} />
+                        <Route path="settings" element={<Settings />} />
                         
                         {/* Redirección por defecto al Dashboard */}
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
