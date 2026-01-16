@@ -8,7 +8,8 @@ import Payments from './pages/Payments';
 import Clients from './pages/Clients'; 
 import Inventory from './pages/Inventory';
 import Dashboard from './pages/Dashboard'; 
-import Settings from './pages/Setting';
+import Settings from './pages/Config.jsx';
+import Config from './pages/Config.jsx';
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }) => {
@@ -32,7 +33,7 @@ function App() {
                         <Route path="/pagos" element={<Payments />} />
                         <Route path="/clientes" element={<Clients />} /> 
                         <Route path="/inventario" element={<Inventory />} />
-                        <Route path="settings" element={<Settings />} />
+                        <Route path="/config" element={<Config />} />
                         
                         {/* Redirección por defecto al Dashboard */}
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
