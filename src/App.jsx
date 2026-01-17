@@ -8,7 +8,6 @@ import Payments from './pages/Payments';
 import Clients from './pages/Clients'; 
 import Inventory from './pages/Inventory';
 import Dashboard from './pages/Dashboard'; 
-import Settings from './pages/Config.jsx';
 import Config from './pages/Config.jsx';
 
 // Componente para proteger rutas
