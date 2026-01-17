@@ -15,9 +15,9 @@ import {
   QrCodeIcon,
   XMarkIcon,
   CurrencyDollarIcon,
-  CheckBadgeIcon,
+  CheckIcon,
   SparklesIcon,
-  ClockIcon
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
@@ -25,15 +25,7 @@ const Config = () => {
   const [activeTab, setActiveTab] = useState('negocio');
   
   // --- ESTADOS DE DATOS ---
-  const [empresa, setEmpresa] = useState({
-    nombre: '', ruc: '', direccion_fiscal: '', 
-    telefono_contacto: '', email_contacto: '', moneda: 'PEN', 
-    logo: null, plan: 'FREE', estado: 'ACTIVO',
-    stock_minimo_global: 10,
-    notif_email_activas: true,
-    notif_whatsapp_activas: false,
-    notif_sms_activas: false
-  });
+  const [empresa, setEmpresa] = useState(null);
   const [sedes, setSedes] = useState([]);
   const [metodosPago, setMetodosPago] = useState([]);
   const [servicios, setServicios] = useState([]);
@@ -42,6 +34,7 @@ const Config = () => {
   
   // --- ESTADOS DE UI ---
   const [loading, setLoading] = useState(false);
+  const [editModeEmpresa, setEditModeEmpresa] = useState(false);
   
   // Modales
   const [modalSede, setModalSede] = useState({ open: false, data: null });
@@ -69,7 +62,10 @@ const Config = () => {
 
       if (resEmpresa.data.results && resEmpresa.data.results.length > 0) {
         setEmpresa(resEmpresa.data.results[0]);
+      } else {
+        setEmpresa({ nombre: '', ruc: '', moneda: 'PEN' });
       }
+
       setSedes(resSedes.data.results || []);
       setMetodosPago(resPagos.data.results || []);
       setCategorias(resCats.data.results || []);
@@ -77,7 +73,7 @@ const Config = () => {
       setPrendas(resPrendas.data.results || []);
     } catch (error) {
       console.error("Error cargando configuración", error);
-      toast.error("Error al cargar datos");
+      toast.error("Error al cargar datos del sistema");
     } finally {
       setLoading(false);
     }
@@ -85,14 +81,19 @@ const Config = () => {
 
   // --- HANDLERS ---
   const handleGuardarEmpresa = async () => {
+    if (!empresa?.id) {
+        toast.error("No se identificó la empresa para actualizar.");
+        return;
+    }
     setLoading(true);
     try {
       await axios.patch(`/core/empresa/${empresa.id}/`, empresa);
-      toast.success("Datos actualizados correctamente");
+      toast.success("Información de empresa actualizada");
+      setEditModeEmpresa(false);
       fetchInitialData();
     } catch (error) {
       console.error(error);
-      toast.error("Error al guardar");
+      toast.error("Error al guardar cambios");
     } finally {
       setLoading(false);
     }
@@ -104,17 +105,18 @@ const Config = () => {
     const data = Object.fromEntries(formData.entries());
     
     try {
-      if (modalSede.data) {
+      if (modalSede.data?.id) {
         await axios.patch(`/core/sedes/${modalSede.data.id}/`, data);
         toast.success("Sede actualizada");
       } else {
         await axios.post('/core/sedes/', data);
-        toast.success("Sede creada");
+        toast.success("Sede creada correctamente");
       }
       setModalSede({ open: false, data: null });
       const res = await axios.get('/core/sedes/');
       setSedes(res.data.results);
     } catch (error) {
+      console.error(error);
       toast.error("Error guardando sede");
     }
   };
@@ -126,7 +128,7 @@ const Config = () => {
       setSedes(sedes.filter(s => s.id !== id));
       toast.success("Sede eliminada");
     } catch (error) {
-      toast.error("No se puede eliminar");
+      toast.error("No se puede eliminar (puede tener tickets asociados)");
     }
   };
 
@@ -149,7 +151,7 @@ const Config = () => {
       const res = await axios.get('/pagos/config/');
       setMetodosPago(res.data.results);
     } catch (error) {
-      toast.error("Error guardando método");
+      toast.error("Error guardando método de pago");
     }
   };
 
@@ -211,104 +213,139 @@ const Config = () => {
     }
   };
 
-  // --- MENÚ DE NAVEGACIÓN ---
-  const tabs = [
-    { id: 'negocio', label: 'Mi Negocio', icon: BuildingStorefrontIcon, color: 'blue' },
-    { id: 'suscripcion', label: 'Suscripción', icon: SparklesIcon, color: 'purple' },
-    { id: 'pagos', label: 'Métodos de Pago', icon: CreditCardIcon, color: 'green' },
-    { id: 'servicios', label: 'Servicios y Precios', icon: TagIcon, color: 'orange' },
-    { id: 'tickets', label: 'Config. Tickets', icon: TicketIcon, color: 'pink' },
-    { id: 'usuarios', label: 'Usuarios y Roles', icon: UserGroupIcon, color: 'indigo' },
-    { id: 'inventario', label: 'Inventario', icon: CubeIcon, color: 'teal' },
-    { id: 'notificaciones', label: 'Notificaciones', icon: BellIcon, color: 'yellow' },
-  ];
+  // --- COMPONENTS UI ---
+  const SectionHeader = ({ title, icon: Icon, actionButton }) => (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100 dark:border-gray-700">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
+          <Icon className="h-6 w-6" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
+      </div>
+      {actionButton}
+    </div>
+  );
 
   // --- VISTAS / TABS ---
 
-  const TabNegocio = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* COLUMNA IZQUIERDA: INFO EMPRESA */}
-      <div className="lg:col-span-1">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-bold mb-6 text-gray-900 dark:text-white flex items-center gap-2">
-            <BuildingStorefrontIcon className="h-5 w-5 text-blue-600" /> Información Principal
-          </h3>
-          <div className="space-y-4">
-            <div>
+  const TabNegocio = () => {
+    if (!empresa) return <div className="p-12 text-center text-gray-400"><ArrowPathIcon className="h-8 w-8 animate-spin mx-auto"/> Cargando...</div>;
+
+    return (
+      <div className="space-y-8 animate-in fade-in duration-300">
+        {/* INFO EMPRESA */}
+        <div className="card">
+          <SectionHeader 
+            title="Información del Negocio" 
+            icon={BuildingStorefrontIcon}
+            actionButton={
+              !editModeEmpresa ? (
+                <button onClick={() => setEditModeEmpresa(true)} className="btn-secondary">
+                  <PencilIcon className="h-4 w-4" /> Editar Datos
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => setEditModeEmpresa(false)} className="btn-danger">Cancelar</button>
+                  <button onClick={handleGuardarEmpresa} disabled={loading} className="btn-primary">
+                    {loading ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
+              )
+            }
+          />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="form-group">
               <label className="label">Nombre Comercial</label>
-              <input value={empresa.nombre || ''} onChange={e => setEmpresa({...empresa, nombre: e.target.value})} className="input" />
+              <input 
+                disabled={!editModeEmpresa}
+                value={empresa.nombre || ''} 
+                onChange={e => setEmpresa({...empresa, nombre: e.target.value})} 
+                className={!editModeEmpresa ? 'input-readonly' : 'input'}
+                placeholder="Ej: Mi Lavandería"
+              />
             </div>
-            <div>
-              <label className="label">RUC</label>
-              <input value={empresa.ruc || ''} onChange={e => setEmpresa({...empresa, ruc: e.target.value})} className="input" />
+            <div className="form-group">
+              <label className="label">RUC / Identificación</label>
+              <input 
+                disabled={!editModeEmpresa}
+                value={empresa.ruc || ''} 
+                onChange={e => setEmpresa({...empresa, ruc: e.target.value})} 
+                className={!editModeEmpresa ? 'input-readonly font-mono' : 'input'}
+              />
             </div>
-            <div>
+            <div className="form-group">
+              <label className="label">Moneda</label>
+              <select 
+                disabled={!editModeEmpresa}
+                value={empresa.moneda || 'PEN'} 
+                onChange={e => setEmpresa({...empresa, moneda: e.target.value})} 
+                className={!editModeEmpresa ? 'input-readonly bg-transparent appearance-none' : 'input'}
+              >
+                <option value="PEN">Soles (S/)</option>
+                <option value="USD">Dólares ($)</option>
+              </select>
+            </div>
+            <div className="form-group lg:col-span-2">
               <label className="label">Dirección Fiscal</label>
-              <textarea value={empresa.direccion_fiscal || ''} onChange={e => setEmpresa({...empresa, direccion_fiscal: e.target.value})} className="input min-h-[80px]" rows="3" />
+              <input
+                disabled={!editModeEmpresa}
+                value={empresa.direccion_fiscal || ''} 
+                onChange={e => setEmpresa({...empresa, direccion_fiscal: e.target.value})} 
+                className={!editModeEmpresa ? 'input-readonly' : 'input'}
+              />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">Teléfono</label>
-                <input value={empresa.telefono_contacto || ''} onChange={e => setEmpresa({...empresa, telefono_contacto: e.target.value})} className="input" />
-              </div>
-              <div>
-                <label className="label">Moneda</label>
-                <select value={empresa.moneda || 'PEN'} onChange={e => setEmpresa({...empresa, moneda: e.target.value})} className="input">
-                  <option value="PEN">Soles (S/)</option>
-                  <option value="USD">Dólares ($)</option>
-                </select>
-              </div>
+            <div className="form-group">
+              <label className="label">Teléfono</label>
+              <input 
+                disabled={!editModeEmpresa}
+                value={empresa.telefono_contacto || ''} 
+                onChange={e => setEmpresa({...empresa, telefono_contacto: e.target.value})} 
+                className={!editModeEmpresa ? 'input-readonly' : 'input'}
+              />
             </div>
-            <div>
-              <label className="label">Email</label>
-              <input type="email" value={empresa.email_contacto || ''} onChange={e => setEmpresa({...empresa, email_contacto: e.target.value})} className="input" />
-            </div>
-            <button onClick={handleGuardarEmpresa} disabled={loading} className="btn-primary w-full mt-4">
-              {loading ? 'Guardando...' : 'Guardar Cambios'}
-            </button>
           </div>
         </div>
-      </div>
 
-      {/* COLUMNA DERECHA: SEDES */}
-      <div className="lg:col-span-2">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <MapPinIcon className="h-5 w-5 text-green-600" /> Sedes y Sucursales
-            </h3>
-            <button onClick={() => setModalSede({ open: true, data: null })} className="btn-secondary text-sm">
-              <PlusIcon className="h-4 w-4" /> Nueva Sede
-            </button>
-          </div>
+        {/* SEDES */}
+        <div className="card">
+          <SectionHeader 
+            title="Sedes y Sucursales" 
+            icon={MapPinIcon}
+            actionButton={
+              <button onClick={() => setModalSede({ open: true, data: null })} className="btn-primary">
+                <PlusIcon className="h-5 w-5" /> Nueva Sede
+              </button>
+            }
+          />
           
-          <div className="overflow-x-auto">
+          <div className="table-container">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
+              <thead>
                 <tr>
                   <th className="th">Nombre</th>
                   <th className="th">Código</th>
-                  <th className="th">Dirección</th>
+                  <th className="th hidden md:table-cell">Dirección</th>
                   <th className="th">Horario</th>
                   <th className="th text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody>
                 {sedes.length === 0 && (
-                  <tr><td colSpan="5" className="td text-center text-gray-500 dark:text-gray-400 py-8">No hay sedes registradas</td></tr>
+                  <tr><td colSpan="5" className="td text-center text-gray-500 py-8">No hay sedes registradas</td></tr>
                 )}
                 {sedes.map((sede) => (
                   <tr key={sede.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="td font-semibold text-gray-900 dark:text-white">{sede.nombre}</td>
-                    <td className="td font-mono text-sm text-gray-600 dark:text-gray-400">{sede.codigo}</td>
-                    <td className="td text-sm text-gray-600 dark:text-gray-300 truncate max-w-[200px]">{sede.direccion}</td>
-                    <td className="td text-xs text-gray-500 dark:text-gray-400">{sede.horario_apertura} - {sede.horario_cierre}</td>
+                    <td className="td font-semibold">{sede.nombre}</td>
+                    <td className="td"><span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono font-bold">{sede.codigo}</span></td>
+                    <td className="td hidden md:table-cell text-gray-500">{sede.direccion}</td>
+                    <td className="td text-sm text-gray-500">{sede.horario_apertura} - {sede.horario_cierre}</td>
                     <td className="td text-right">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => setModalSede({ open: true, data: sede })} className="btn-icon text-blue-600 dark:text-blue-400">
+                        <button onClick={() => setModalSede({ open: true, data: sede })} className="btn-icon">
                           <PencilIcon className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleDeleteSede(sede.id)} className="btn-icon text-red-600 dark:text-red-400">
+                        <button onClick={() => handleDeleteSede(sede.id)} className="btn-icon text-red-500 hover:bg-red-50">
                           <TrashIcon className="h-4 w-4" />
                         </button>
                       </div>
@@ -320,42 +357,35 @@ const Config = () => {
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const TabSuscripcion = () => {
-    const diasRestantes = Math.ceil((new Date(empresa.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24));
+    if (!empresa) return null;
+    const diasRestantes = empresa.fecha_vencimiento ? Math.ceil((new Date(empresa.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24)) : 30;
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl p-8 border border-purple-200 dark:border-purple-800">
-          <div className="flex items-start gap-6">
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg">
-              <SparklesIcon className="h-12 w-12 text-purple-600" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Plan {empresa.plan}</h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-4">
-                {empresa.estado === 'ACTIVO' ? (
-                  <span className="flex items-center gap-2">
-                    <CheckBadgeIcon className="h-5 w-5 text-green-500" />
-                    Tu suscripción está activa
-                  </span>
-                ) : (
-                  <span className="text-red-600 dark:text-red-400">⚠️ Suscripción {empresa.estado}</span>
-                )}
-              </p>
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Días restantes</span>
-                  <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">{diasRestantes > 0 ? diasRestantes : 0}</span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div className="bg-purple-600 h-2 rounded-full" style={{width: `${Math.min(100, (diasRestantes / 30) * 100)}%`}}></div>
-                </div>
+      <div className="card bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-none max-w-4xl mx-auto">
+        <div className="flex items-start gap-6">
+          <div className="bg-white/20 p-4 rounded-xl backdrop-blur-sm">
+            <SparklesIcon className="h-12 w-12 text-white" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-3xl font-bold mb-2">Plan {empresa.plan || 'FREE'}</h2>
+            <p className="text-blue-100 mb-6 text-lg">Tu suscripción se encuentra activa.</p>
+            
+            <div className="bg-white/10 rounded-xl p-6 mb-6 backdrop-blur-md border border-white/20">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium text-blue-100">Días restantes</span>
+                <span className="px-3 py-1 bg-green-500/20 text-green-200 rounded-full text-xs font-bold border border-green-500/30">
+                  {empresa.estado || 'ACTIVO'}
+                </span>
               </div>
-              <button className="btn-primary">
-                🚀 Renovar Suscripción
-              </button>
+              <div className="flex justify-between items-end mt-4">
+                  <div className="text-4xl font-bold">{diasRestantes > 0 ? diasRestantes : 0}</div>
+                  <button className="bg-white text-blue-700 px-5 py-2.5 rounded-xl font-bold hover:bg-blue-50 transition-colors shadow-sm">
+                      Gestionar Plan
+                  </button>
+              </div>
             </div>
           </div>
         </div>
@@ -364,38 +394,47 @@ const Config = () => {
   };
 
   const TabPagos = () => (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <CreditCardIcon className="h-5 w-5 text-green-600" /> Métodos de Pago Activos
-        </h3>
-        <button onClick={() => setModalPago({ open: true, data: null })} className="btn-primary text-sm">
-          <PlusIcon className="h-4 w-4" /> Nuevo Método
-        </button>
-      </div>
+    <div className="card">
+      <SectionHeader 
+        title="Métodos de Pago" 
+        icon={CreditCardIcon}
+        actionButton={
+          <button onClick={() => setModalPago({ open: true, data: null })} className="btn-primary">
+            <PlusIcon className="h-5 w-5" /> Nuevo Método
+          </button>
+        }
+      />
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {metodosPago.map(metodo => (
-          <div key={metodo.id} className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 hover:shadow-lg transition-all group relative">
-            <button onClick={() => setModalPago({ open: true, data: metodo })} className="absolute top-2 right-2 p-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
-              <PencilIcon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-            </button>
-            <div className="flex gap-3">
-              <div className="w-14 h-14 bg-white dark:bg-gray-600 rounded-lg border border-gray-200 dark:border-gray-500 flex items-center justify-center flex-shrink-0 overflow-hidden">
+          <div key={metodo.id} className="border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-all relative group flex flex-col gap-3">
+            <div className="flex justify-between items-start">
+              <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-600 flex items-center justify-center overflow-hidden">
                 {metodo.imagen_qr ? (
                   <img src={metodo.imagen_qr} alt="QR" className="w-full h-full object-cover" />
                 ) : (
-                  <QrCodeIcon className="w-7 h-7 text-gray-400 dark:text-gray-500" />
+                  <QrCodeIcon className="w-6 h-6 text-gray-400" />
                 )}
               </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-gray-900 dark:text-white truncate">{metodo.nombre_mostrar}</h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-1">{metodo.codigo_metodo}</p>
-                <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${metodo.activo ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'}`}>
+              <div className="flex gap-2">
+                <span className={`h-6 px-2 flex items-center rounded-full text-[10px] font-bold uppercase border ${metodo.activo ? 'bg-green-50 text-green-700 border-green-100' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                   {metodo.activo ? 'Activo' : 'Inactivo'}
                 </span>
-                {metodo.numero_cuenta && <p className="text-xs mt-2 text-gray-600 dark:text-gray-400 truncate font-medium">{metodo.numero_cuenta}</p>}
+                <button onClick={() => setModalPago({ open: true, data: metodo })} className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
+                  <PencilIcon className="h-4 w-4" />
+                </button>
               </div>
+            </div>
+            
+            <div>
+              <h4 className="font-bold text-gray-900 dark:text-white truncate text-lg">{metodo.nombre_mostrar}</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-1">COD: {metodo.codigo_metodo}</p>
+              {metodo.numero_cuenta && (
+                <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700">
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-0.5">Cuenta / Celular</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 font-mono">{metodo.numero_cuenta}</p>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -406,76 +445,81 @@ const Config = () => {
   const TabServicios = () => (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
       {/* SIDEBAR: CATEGORÍAS */}
-      <div className="lg:col-span-1">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="flex justify-between items-center mb-4">
-            <h4 className="font-bold text-gray-900 dark:text-white text-sm">Categorías</h4>
-            <button onClick={() => setModalCategoria({ open: true, data: null })} className="btn-icon text-blue-600 dark:text-blue-400">
+      <div className="lg:col-span-1 h-full">
+        <div className="card h-full p-4">
+          <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100 dark:border-gray-700">
+            <h4 className="font-bold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wide">Categorías</h4>
+            <button onClick={() => setModalCategoria({ open: true, data: null })} className="btn-icon bg-blue-50 text-blue-600">
               <PlusIcon className="h-4 w-4" />
             </button>
           </div>
-          <div className="space-y-1 max-h-[600px] overflow-y-auto">
+          <div className="space-y-2">
             {categorias.map(c => (
-              <div key={c.id} className="group flex items-center justify-between p-2.5 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors cursor-pointer">
+              <div key={c.id} className="group flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-100 transition-all cursor-pointer">
                 <span className="text-sm text-gray-700 dark:text-gray-200 font-medium">{c.nombre}</span>
-                <button onClick={() => setModalCategoria({ open: true, data: c })} className="opacity-0 group-hover:opacity-100 btn-icon p-1">
-                  <PencilIcon className="h-3 w-3" />
+                <button onClick={() => setModalCategoria({ open: true, data: c })} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600">
+                  <PencilIcon className="h-4 w-4" />
                 </button>
               </div>
             ))}
+            {categorias.length === 0 && <p className="text-xs text-gray-400 text-center py-8">Sin categorías registradas</p>}
           </div>
         </div>
       </div>
 
       {/* TABLA SERVICIOS */}
       <div className="lg:col-span-3">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <TagIcon className="h-5 w-5 text-orange-500" /> Catálogo de Servicios
-            </h3>
-            <button onClick={() => setModalServicio({ open: true, data: null })} className="btn-primary text-sm">
-              <PlusIcon className="h-4 w-4" /> Nuevo Servicio
-            </button>
-          </div>
+        <div className="card">
+          <SectionHeader 
+            title="Catálogo de Servicios" 
+            icon={TagIcon}
+            actionButton={
+              <button onClick={() => setModalServicio({ open: true, data: null })} className="btn-primary">
+                <PlusIcon className="h-5 w-5" /> Nuevo Servicio
+              </button>
+            }
+          />
           
-          <div className="overflow-x-auto">
+          <div className="table-container">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
+              <thead>
                 <tr>
                   <th className="th">Servicio</th>
                   <th className="th">Tipo</th>
-                  <th className="th">Precio</th>
+                  <th className="th text-right">Precio Base</th>
                   <th className="th text-center">Estado</th>
                   <th className="th text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody>
                 {servicios.map(s => (
                   <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="td">
                       <div className="font-bold text-gray-900 dark:text-white">{s.nombre}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{s.codigo}</div>
+                      <div className="text-xs text-gray-500 font-mono mt-0.5">{s.codigo}</div>
                     </td>
                     <td className="td">
-                      <span className={`text-xs px-2 py-1 rounded-full font-bold ${s.tipo_cobro === 'POR_KILO' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'}`}>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
+                        s.tipo_cobro === 'POR_KILO' ? 'bg-orange-50 text-orange-700 border-orange-100' : 
+                        s.tipo_cobro === 'POR_PRENDA' ? 'bg-purple-50 text-purple-700 border-purple-100' : 
+                        'bg-blue-50 text-blue-700 border-blue-100'
+                      }`}>
                         {s.tipo_cobro === 'POR_KILO' ? 'Por Kilo' : s.tipo_cobro === 'POR_PRENDA' ? 'Por Prenda' : 'Fijo'}
                       </span>
                     </td>
-                    <td className="td font-mono font-bold text-gray-900 dark:text-gray-200">S/ {parseFloat(s.precio_base).toFixed(2)}</td>
+                    <td className="td text-right font-mono font-bold text-gray-900 dark:text-white">
+                        S/ {parseFloat(s.precio_base).toFixed(2)}
+                    </td>
                     <td className="td text-center">
-                      {s.disponible ? 
-                        <CheckBadgeIcon className="w-5 h-5 text-green-500 mx-auto"/> : 
-                        <XMarkIcon className="w-5 h-5 text-gray-400 dark:text-gray-600 mx-auto"/>
-                      }
+                      {s.disponible ? <CheckIcon className="w-5 h-5 text-green-500 mx-auto"/> : <XMarkIcon className="w-5 h-5 text-gray-300 mx-auto"/>}
                     </td>
                     <td className="td">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => setModalServicio({ open: true, data: s })} className="btn-icon text-blue-600 dark:text-blue-400">
+                        <button onClick={() => setModalServicio({ open: true, data: s })} className="btn-icon">
                           <PencilIcon className="h-4 w-4"/>
                         </button>
                         {s.tipo_cobro === 'POR_PRENDA' && (
-                          <button onClick={() => setModalPrecios({ open: true, data: s })} className="btn-icon text-purple-600 dark:text-purple-400">
+                          <button onClick={() => setModalPrecios({ open: true, data: s })} className="btn-icon text-purple-600 bg-purple-50 hover:bg-purple-100" title="Precios por Prenda">
                             <CurrencyDollarIcon className="h-4 w-4"/>
                           </button>
                         )}
@@ -492,149 +536,92 @@ const Config = () => {
   );
 
   const TabTickets = () => (
-    <div className="max-w-4xl mx-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-          <TicketIcon className="h-5 w-5 text-pink-600" /> Configuración de Tickets
-        </h3>
+    <div className="max-w-3xl mx-auto">
+      <div className="card p-8">
+        <SectionHeader title="Configuración de Tickets" icon={TicketIcon} />
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Prefijo de Numeración</label>
-              <input defaultValue="TK-" className="input" placeholder="TK-" />
+          <div className="grid grid-cols-2 gap-6">
+            <div className="form-group">
+              <label className="label">Prefijo Ticket</label>
+              <input defaultValue="TK-" className="input" />
             </div>
-            <div>
-              <label className="label">Plazo de Entrega (días)</label>
+            <div className="form-group">
+              <label className="label">Días Entrega</label>
               <input type="number" defaultValue="2" className="input" />
             </div>
           </div>
-          <div>
-            <label className="label">Mensaje al Pie del Ticket</label>
-            <textarea className="input min-h-[100px]" rows="4" placeholder="Política de cancelación, términos y condiciones..."></textarea>
+          <div className="form-group">
+            <label className="label">Mensaje al Pie</label>
+            <textarea className="input min-h-[100px] py-3" rows="3" placeholder="Gracias por su preferencia..."></textarea>
           </div>
-          <div>
-            <label className="label">Tamaño de Papel de Impresión</label>
-            <select className="input">
-              <option>80mm (Estándar)</option>
-              <option>58mm (Compacto)</option>
-            </select>
+          <div className="pt-4">
+            <button className="btn-primary w-full">Guardar Configuración</button>
           </div>
-          <button className="btn-primary w-full">Guardar Configuración</button>
         </div>
       </div>
     </div>
   );
 
   const TabUsuarios = () => (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <UserGroupIcon className="h-5 w-5 text-indigo-600" /> Usuarios y Permisos
-        </h3>
-        <button className="btn-primary text-sm">
-          <PlusIcon className="h-4 w-4" /> Nuevo Usuario
-        </button>
-      </div>
-      <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-        <UserGroupIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
-        <p className="font-semibold">Gestión de usuarios próximamente</p>
-        <p className="text-sm mt-2">Aquí podrás crear usuarios con roles (Admin, Cajero, Operario)</p>
-      </div>
+    <div className="card text-center py-16 bg-gray-50 dark:bg-gray-800 border-dashed">
+      <UserGroupIcon className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+      <h3 className="text-lg font-bold text-gray-600 dark:text-gray-400">Módulo de Usuarios</h3>
+      <p className="text-gray-500 mt-2">Próximamente podrás gestionar roles y permisos aquí.</p>
     </div>
   );
 
   const TabInventario = () => (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-        <CubeIcon className="h-5 w-5 text-teal-600" /> Configuración de Inventario
-      </h3>
-      <div className="space-y-4 max-w-2xl">
-        <div>
-          <label className="label">Stock Mínimo Global (Alerta)</label>
+    <div className="card max-w-xl mx-auto">
+      <SectionHeader title="Ajustes de Inventario" icon={CubeIcon} />
+      <div className="form-group">
+        <label className="label">Stock Mínimo Global</label>
+        <div className="flex gap-4">
           <input 
             type="number" 
-            value={empresa.stock_minimo_global || 10} 
+            value={empresa?.stock_minimo_global || 10} 
             onChange={e => setEmpresa({...empresa, stock_minimo_global: parseInt(e.target.value)})}
             className="input" 
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Se notificará cuando productos bajen de este nivel</p>
+          <button onClick={handleGuardarEmpresa} className="btn-primary whitespace-nowrap">Guardar</button>
         </div>
-        <button onClick={handleGuardarEmpresa} className="btn-primary">Guardar Configuración</button>
+        <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+          <BellIcon className="w-4 h-4"/> Alerta cuando insumos bajen de este nivel.
+        </p>
       </div>
     </div>
   );
 
   const TabNotificaciones = () => (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-        <BellIcon className="h-5 w-5 text-yellow-600" /> Configuración de Notificaciones
-      </h3>
-      
-      <div className="space-y-6 max-w-2xl">
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <p className="text-sm text-yellow-800 dark:text-yellow-300">
-            ⚠️ Módulo en desarrollo. Configuración disponible próximamente.
-          </p>
+    <div className="card max-w-3xl mx-auto">
+      <SectionHeader title="Notificaciones" icon={BellIcon} />
+      <div className="space-y-4">
+        <label className="flex items-center gap-4 p-4 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+          <input 
+            type="checkbox" 
+            checked={empresa?.notif_email_activas || false}
+            onChange={e => setEmpresa({...empresa, notif_email_activas: e.target.checked})}
+            className="w-5 h-5 text-blue-600 rounded"
+          />
+          <div>
+            <div className="font-bold text-gray-900 dark:text-white">Email</div>
+            <div className="text-sm text-gray-500">Notificar al cliente por correo.</div>
+          </div>
+        </label>
+        <div className="pt-4">
+            <button onClick={handleGuardarEmpresa} className="btn-primary">Guardar Preferencias</button>
         </div>
-
-        <div className="space-y-4">
-          <h4 className="font-semibold text-gray-900 dark:text-white">Canales de Notificación</h4>
-          
-          <label className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={empresa.notif_email_activas}
-              onChange={e => setEmpresa({...empresa, notif_email_activas: e.target.checked})}
-              className="w-5 h-5 text-blue-600 rounded"
-            />
-            <div>
-              <div className="font-medium text-gray-900 dark:text-white">Email</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Enviar notificaciones por correo electrónico</div>
-            </div>
-          </label>
-
-          <label className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg cursor-pointer opacity-60">
-            <input 
-              type="checkbox" 
-              checked={empresa.notif_whatsapp_activas}
-              onChange={e => setEmpresa({...empresa, notif_whatsapp_activas: e.target.checked})}
-              className="w-5 h-5 text-green-600 rounded"
-              disabled
-            />
-            <div>
-              <div className="font-medium text-gray-900 dark:text-white">WhatsApp <span className="text-xs text-yellow-600">(Próximamente)</span></div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Enviar mensajes por WhatsApp Business</div>
-            </div>
-          </label>
-
-          <label className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg cursor-pointer opacity-60">
-            <input 
-              type="checkbox" 
-              checked={empresa.notif_sms_activas}
-              onChange={e => setEmpresa({...empresa, notif_sms_activas: e.target.checked})}
-              className="w-5 h-5 text-purple-600 rounded"
-              disabled
-            />
-            <div>
-              <div className="font-medium text-gray-900 dark:text-white">SMS <span className="text-xs text-yellow-600">(Próximamente)</span></div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">Enviar mensajes de texto</div>
-            </div>
-          </label>
-        </div>
-
-        <button onClick={handleGuardarEmpresa} className="btn-primary">Guardar Configuración</button>
       </div>
     </div>
   );
 
   // --- MODAL WRAPPER ---
   const ModalContainer = ({ title, onClose, children }) => (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden border border-gray-200 dark:border-gray-700">
-        <div className="bg-gray-50 dark:bg-gray-900/50 px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center sticky top-0 z-10">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800">
           <h3 className="font-bold text-lg text-gray-900 dark:text-white">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-600 dark:hover:text-red-400">
-            <XMarkIcon className="h-6 w-6"/>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-1 transition-colors">
+            <XMarkIcon className="h-5 w-5"/>
           </button>
         </div>
         <div className="p-6 overflow-y-auto">
@@ -644,16 +631,27 @@ const Config = () => {
     </div>
   );
 
+  // --- MENU LATERAL ---
+  const tabs = [
+    { id: 'negocio', label: 'Mi Negocio', icon: BuildingStorefrontIcon },
+    { id: 'suscripcion', label: 'Suscripción', icon: SparklesIcon },
+    { id: 'pagos', label: 'Pagos', icon: CreditCardIcon },
+    { id: 'servicios', label: 'Servicios', icon: TagIcon },
+    { id: 'tickets', label: 'Tickets', icon: TicketIcon },
+    { id: 'usuarios', label: 'Usuarios', icon: UserGroupIcon },
+    { id: 'inventario', label: 'Inventario', icon: CubeIcon },
+    { id: 'notificaciones', label: 'Notificaciones', icon: BellIcon },
+  ];
+
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-      {/* SIDEBAR IZQUIERDO - PESTAÑAS */}
-      <div className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white">Configuración</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Gestiona tu sistema</p>
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden">
+      {/* SIDEBAR NAVEGACIÓN */}
+      <aside className="w-full lg:w-64 bg-white dark:bg-gray-800 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 flex-shrink-0 z-10 shadow-sm">
+        <div className="p-6 hidden lg:block">
+          <h1 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Ajustes</h1>
+          <p className="text-sm text-gray-500 font-medium">Panel de Control</p>
         </div>
-        
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        <nav className="p-2 lg:px-4 space-y-1 overflow-x-auto lg:overflow-visible flex lg:block scrollbar-hide">
           {tabs.map(tab => {
             const isActive = activeTab === tab.id;
             const Icon = tab.icon;
@@ -661,23 +659,23 @@ const Config = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left ${
-                  isActive
-                    ? `bg-${tab.color}-50 dark:bg-${tab.color}-900/20 text-${tab.color}-700 dark:text-${tab.color}-300 font-semibold shadow-sm`
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
-                }`}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all w-full text-left whitespace-nowrap group
+                  ${isActive 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 font-semibold' 
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400'
+                  }`}
               >
-                <Icon className={`h-5 w-5 ${isActive ? `text-${tab.color}-600` : 'text-gray-400'}`} />
+                <Icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400'}`} />
                 <span className="text-sm">{tab.label}</span>
               </button>
-            );
+            )
           })}
         </nav>
-      </div>
+      </aside>
 
       {/* CONTENIDO PRINCIPAL */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6">
+      <main className="flex-1 overflow-y-auto p-4 lg:p-8 bg-gray-50/50 dark:bg-gray-900">
+        <div className="max-w-6xl mx-auto">
           {activeTab === 'negocio' && <TabNegocio />}
           {activeTab === 'suscripcion' && <TabSuscripcion />}
           {activeTab === 'pagos' && <TabPagos />}
@@ -687,35 +685,35 @@ const Config = () => {
           {activeTab === 'inventario' && <TabInventario />}
           {activeTab === 'notificaciones' && <TabNotificaciones />}
         </div>
-      </div>
+      </main>
 
-      {/* MODALES */}
+      {/* --- MODALES --- */}
+
+      {/* MODAL SEDE */}
       {modalSede.open && (
-        <ModalContainer title={modalSede.data ? 'Editar Sede' : 'Nueva Sede'} onClose={() => setModalSede({ open: false, data: null })}>
+        <ModalContainer title={modalSede.data ? 'Editar Sede' : 'Registrar Nueva Sede'} onClose={() => setModalSede({ open: false, data: null })}>
           <form onSubmit={handleSaveSede} className="space-y-4">
-            <div>
-              <label className="label">Nombre</label>
-              <input name="nombre" defaultValue={modalSede.data?.nombre} className="input" required />
-            </div>
+            <div className="form-group"><label className="label">Nombre</label><input name="nombre" defaultValue={modalSede.data?.nombre} className="input" required /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="label">Código</label><input name="codigo" defaultValue={modalSede.data?.codigo} className="input" required /></div>
-              <div><label className="label">Teléfono</label><input name="telefono" defaultValue={modalSede.data?.telefono} className="input" /></div>
+              <div className="form-group"><label className="label">Código</label><input name="codigo" defaultValue={modalSede.data?.codigo} className="input" required /></div>
+              <div className="form-group"><label className="label">Teléfono</label><input name="telefono" defaultValue={modalSede.data?.telefono} className="input" /></div>
             </div>
-            <div><label className="label">Dirección</label><input name="direccion" defaultValue={modalSede.data?.direccion} className="input" required /></div>
-            <div><label className="label">Email</label><input type="email" name="email" defaultValue={modalSede.data?.email} className="input" /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="label">Apertura</label><input type="time" name="horario_apertura" defaultValue={modalSede.data?.horario_apertura || "08:00"} className="input" /></div>
-              <div><label className="label">Cierre</label><input type="time" name="horario_cierre" defaultValue={modalSede.data?.horario_cierre || "20:00"} className="input" /></div>
+            <div className="form-group"><label className="label">Dirección</label><input name="direccion" defaultValue={modalSede.data?.direccion} className="input" required /></div>
+            <div className="form-group"><label className="label">Email</label><input type="email" name="email" defaultValue={modalSede.data?.email} className="input" /></div>
+            <div className="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+              <div className="form-group mb-0"><label className="label text-xs">Apertura</label><input type="time" name="horario_apertura" defaultValue={modalSede.data?.horario_apertura || "08:00"} className="input text-sm" /></div>
+              <div className="form-group mb-0"><label className="label text-xs">Cierre</label><input type="time" name="horario_cierre" defaultValue={modalSede.data?.horario_cierre || "20:00"} className="input text-sm" /></div>
             </div>
-            <button className="btn-primary w-full">Guardar</button>
+            <button className="btn-primary w-full mt-2">Guardar Sede</button>
           </form>
         </ModalContainer>
       )}
 
+      {/* MODAL PAGO */}
       {modalPago.open && (
         <ModalContainer title="Método de Pago" onClose={() => setModalPago({ open: false, data: null })}>
           <form onSubmit={handleSavePago} className="space-y-4">
-            <div>
+            <div className="form-group">
               <label className="label">Tipo</label>
               <select name="codigo_metodo" defaultValue={modalPago.data?.codigo_metodo || 'YAPE'} className="input">
                 <option value="EFECTIVO">Efectivo</option>
@@ -725,128 +723,95 @@ const Config = () => {
                 <option value="TRANSFERENCIA">Transferencia</option>
               </select>
             </div>
-            <div>
-              <label className="label">Nombre a Mostrar</label>
-              <input name="nombre_mostrar" defaultValue={modalPago.data?.nombre_mostrar} className="input" required />
+            <div className="form-group"><label className="label">Nombre a Mostrar</label><input name="nombre_mostrar" defaultValue={modalPago.data?.nombre_mostrar} className="input" required /></div>
+            <div className="form-group"><label className="label">N° Cuenta / Celular</label><input name="numero_cuenta" defaultValue={modalPago.data?.numero_cuenta} className="input" /></div>
+            <div className="form-group">
+              <label className="label">Imagen QR</label>
+              <input type="file" name="imagen_qr" accept="image/*" className="input text-sm pt-2" />
             </div>
-            <div>
-              <label className="label">Número / Cuenta</label>
-              <input name="numero_cuenta" defaultValue={modalPago.data?.numero_cuenta} className="input" />
-            </div>
-            <div>
-              <label className="label">QR (Imagen)</label>
-              <input type="file" name="imagen_qr" accept="image/*" className="input text-sm" />
-            </div>
-            <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <input type="checkbox" name="activo" defaultChecked={modalPago.data?.activo !== false} className="w-5 h-5" />
-              <span className="text-sm font-medium text-gray-900 dark:text-white">Método Activo</span>
+            <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer">
+              <input type="checkbox" name="activo" defaultChecked={modalPago.data?.activo !== false} className="w-5 h-5 text-blue-600 rounded" />
+              <span className="text-sm font-medium">Método Activo</span>
             </label>
-            <button className="btn-primary w-full">Guardar</button>
+            <button className="btn-primary w-full">Guardar Método</button>
           </form>
         </ModalContainer>
       )}
 
+      {/* MODAL SERVICIO */}
       {modalServicio.open && (
         <ModalContainer title={modalServicio.data ? 'Editar Servicio' : 'Nuevo Servicio'} onClose={() => setModalServicio({ open: false, data: null })}>
           <form onSubmit={handleSaveServicio} className="space-y-4">
-            <div><label className="label">Nombre</label><input name="nombre" defaultValue={modalServicio.data?.nombre} className="input" required /></div>
+            <div className="form-group"><label className="label">Nombre</label><input name="nombre" defaultValue={modalServicio.data?.nombre} className="input" required /></div>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="label">Código</label><input name="codigo" defaultValue={modalServicio.data?.codigo} className="input" required /></div>
-              <div><label className="label">Precio Base</label><input type="number" step="0.1" name="precio_base" defaultValue={modalServicio.data?.precio_base} className="input" required /></div>
+              <div className="form-group"><label className="label">Código</label><input name="codigo" defaultValue={modalServicio.data?.codigo} className="input" required /></div>
+              <div className="form-group"><label className="label">Precio Base</label><input type="number" step="0.1" name="precio_base" defaultValue={modalServicio.data?.precio_base} className="input" required /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div>
+              <div className="form-group">
                 <label className="label">Categoría</label>
                 <select name="categoria" defaultValue={modalServicio.data?.categoria} className="input">
                   {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="label">Tipo de Cobro</label>
+              <div className="form-group">
+                <label className="label">Cobro por</label>
                 <select name="tipo_cobro" defaultValue={modalServicio.data?.tipo_cobro || 'POR_KILO'} className="input">
-                  <option value="POR_UNIDAD">Precio Fijo</option>
-                  <option value="POR_KILO">Por Kilo</option>
-                  <option value="POR_PRENDA">Por Prenda</option>
+                  <option value="POR_UNIDAD">Unidad</option>
+                  <option value="POR_KILO">Kilo</option>
+                  <option value="POR_PRENDA">Prenda</option>
                 </select>
               </div>
             </div>
-            <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-              <input type="checkbox" name="disponible" defaultChecked={modalServicio.data?.disponible !== false} className="w-5 h-5" />
-              <span className="text-sm font-medium text-gray-900 dark:text-white">Disponible en POS</span>
+            <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer">
+              <input type="checkbox" name="disponible" defaultChecked={modalServicio.data?.disponible !== false} className="w-5 h-5 text-blue-600 rounded" />
+              <span className="text-sm font-medium">Disponible en POS</span>
             </label>
-            <button className="btn-primary w-full">Guardar</button>
+            <button className="btn-primary w-full">Guardar Servicio</button>
           </form>
         </ModalContainer>
       )}
 
+      {/* MODAL PRECIOS */}
       {modalPrecios.open && (
         <ModalContainer title={`Precios: ${modalPrecios.data?.nombre}`} onClose={() => setModalPrecios({ open: false, data: null })}>
-          <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg text-sm text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-            Define precios específicos por tipo de prenda
+          <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg flex gap-3 border border-purple-100 dark:border-purple-800">
+            <CurrencyDollarIcon className="w-6 h-6 text-purple-600 flex-shrink-0" />
+            <div className="text-sm text-purple-800 dark:text-purple-300">
+                Define precios específicos por prenda para este servicio.
+            </div>
           </div>
-          <div className="max-h-48 overflow-y-auto space-y-2 mb-4">
-            {modalPrecios.data?.precios_prendas?.length === 0 && <p className="text-center text-gray-400 text-sm py-4">Sin precios definidos</p>}
+          <div className="max-h-56 overflow-y-auto space-y-2 mb-4 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
+            {modalPrecios.data?.precios_prendas?.length === 0 && <p className="text-center text-gray-400 text-sm py-6">No hay precios definidos</p>}
             {modalPrecios.data?.precios_prendas?.map(p => (
-              <div key={p.id} className="flex justify-between items-center bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
-                <span className="font-medium text-gray-900 dark:text-white">{p.prenda_nombre}</span>
-                <span className="font-bold text-green-600 dark:text-green-400">S/ {p.precio}</span>
+              <div key={p.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded shadow-sm border border-gray-100 dark:border-gray-700">
+                <span className="font-medium">{p.prenda_nombre}</span>
+                <span className="font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded text-sm">S/ {p.precio}</span>
               </div>
             ))}
           </div>
-          <form onSubmit={handleSavePrecioPrenda} className="flex gap-2 border-t dark:border-gray-700 pt-4">
+          <form onSubmit={handleSavePrecioPrenda} className="flex gap-2 border-t border-gray-100 dark:border-gray-700 pt-4">
             <select name="prenda" className="flex-1 input text-sm" required>
-              <option value="">Seleccionar...</option>
+              <option value="">Seleccionar prenda...</option>
               {prendas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>
-            <input name="precio" type="number" step="0.10" placeholder="0.00" className="w-24 input text-sm" required />
-            <button className="bg-green-600 text-white px-4 rounded-lg hover:bg-green-700 font-bold">+</button>
+            <input name="precio" type="number" step="0.10" placeholder="0.00" className="w-24 input text-sm text-right" required />
+            <button className="bg-blue-600 text-white px-4 rounded-lg hover:bg-blue-700 font-bold shadow-sm">+</button>
           </form>
         </ModalContainer>
       )}
 
+      {/* MODAL CATEGORIA */}
       {modalCategoria.open && (
         <ModalContainer title={modalCategoria.data ? 'Editar Categoría' : 'Nueva Categoría'} onClose={() => setModalCategoria({ open: false, data: null })}>
           <form onSubmit={handleSaveCategoria} className="space-y-4">
-            <div><label className="label">Nombre</label><input name="nombre" defaultValue={modalCategoria.data?.nombre} className="input" required /></div>
-            <div><label className="label">Descripción</label><textarea name="descripcion" defaultValue={modalCategoria.data?.descripcion} className="input min-h-[80px]" rows="3" /></div>
-            <div><label className="label">Orden</label><input type="number" name="orden" defaultValue={modalCategoria.data?.orden || 0} className="input" /></div>
+            <div className="form-group"><label className="label">Nombre</label><input name="nombre" defaultValue={modalCategoria.data?.nombre} className="input" required /></div>
+            <div className="form-group"><label className="label">Descripción</label><textarea name="descripcion" defaultValue={modalCategoria.data?.descripcion} className="input min-h-[80px]" rows="3" /></div>
+            <div className="form-group"><label className="label">Orden</label><input type="number" name="orden" defaultValue={modalCategoria.data?.orden || 0} className="input" /></div>
             <button className="btn-primary w-full">Guardar</button>
           </form>
         </ModalContainer>
       )}
-
-      {/* ESTILOS */}
-      <style>{`
-        .input { 
-          @apply w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 
-          text-gray-900 dark:text-white rounded-lg px-3 py-2.5 
-          focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
-          outline-none transition-all placeholder-gray-400 dark:placeholder-gray-500; 
-        }
-        .label { 
-          @apply block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide; 
-        }
-        .th { 
-          @apply px-4 py-3 text-left text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider; 
-        }
-        .td { 
-          @apply px-4 py-3 text-sm text-gray-900 dark:text-gray-200; 
-        }
-        .btn-primary { 
-          @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white 
-          rounded-lg font-bold hover:bg-blue-700 dark:hover:bg-blue-500 
-          transition-colors shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed; 
-        }
-        .btn-secondary { 
-          @apply inline-flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 
-          text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900 
-          rounded-lg font-bold hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors; 
-        }
-        .btn-icon { 
-          @apply inline-flex items-center justify-center p-1.5 rounded-lg 
-          hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors; 
-        }
-      `}</style>
     </div>
   );
 };
