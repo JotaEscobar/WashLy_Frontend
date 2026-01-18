@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from '../api/axiosConfig';
 import { 
   BuildingStorefrontIcon, 
@@ -17,11 +17,13 @@ import {
   CurrencyDollarIcon,
   CheckIcon,
   SparklesIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  MagnifyingGlassIcon,
+  ExclamationCircleIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
-// --- SUB-COMPONENTES EXTRAÍDOS (Solución al problema de Foco) ---
+// --- SUB-COMPONENTES EXTRAÍDOS ---
 
 const SectionHeader = ({ title, icon: Icon, actionButton }) => (
   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100 dark:border-gray-700">
@@ -78,7 +80,7 @@ const TabNegocio = ({
               disabled={!editMode}
               value={empresa.nombre || ''} 
               onChange={e => setEmpresa({...empresa, nombre: e.target.value})} 
-              className={!editMode ? 'input-readonly text-sm' : 'input'} // Ajuste de fuente a text-sm
+              className={!editMode ? 'input-readonly text-sm' : 'input'}
               placeholder="Ej: Mi Lavandería"
             />
           </div>
@@ -122,7 +124,6 @@ const TabNegocio = ({
               placeholder="+51..."
             />
           </div>
-          {/* NUEVO CAMPO EMAIL */}
           <div className="form-group">
             <label className="label">Email de Contacto</label>
             <input 
@@ -349,7 +350,7 @@ const TabServicios = ({ servicios, categorias, setModalServicio, setModalCategor
                         <PencilIcon className="h-4 w-4"/>
                       </button>
                       {s.tipo_cobro === 'POR_PRENDA' && (
-                        <button onClick={() => setModalPrecios({ open: true, data: s })} className="btn-icon text-purple-600 bg-purple-50 hover:bg-purple-100" title="Precios por Prenda">
+                        <button onClick={() => setModalPrecios({ open: true, data: s })} className="btn-icon text-purple-600 bg-purple-50 hover:bg-purple-100" title="Configurar Precios por Prenda">
                           <CurrencyDollarIcon className="h-4 w-4"/>
                         </button>
                       )}
@@ -460,6 +461,141 @@ const ModalContainer = ({ title, onClose, children }) => (
     </div>
   </div>
 );
+
+// --- COMPONENTE GESTOR DE PRECIOS POR PRENDA (NUEVO) ---
+const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSavePrecioPrenda, handleDeletePrecioPrenda }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedPrenda, setSelectedPrenda] = useState(null);
+    const [price, setPrice] = useState('');
+
+    // Filtrar prendas (excluir las que ya tienen precio configurado en este servicio)
+    const availablePrendas = useMemo(() => {
+        const configuredIds = modalPrecios.data?.precios_prendas?.map(p => p.prenda) || [];
+        return prendas.filter(p => !configuredIds.includes(p.id));
+    }, [prendas, modalPrecios.data]);
+
+    const filteredSuggestions = useMemo(() => {
+        if (!searchTerm) return [];
+        return availablePrendas.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [searchTerm, availablePrendas]);
+
+    // Verificar si el término exacto existe (para no crear duplicados)
+    const exactMatch = availablePrendas.find(p => p.nombre.toLowerCase() === searchTerm.toLowerCase().trim());
+
+    const handleSelectPrenda = (prenda) => {
+        setSelectedPrenda(prenda);
+        setSearchTerm(prenda.nombre);
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        // Construimos el payload manual para manejar la lógica dual
+        const payload = {
+            precio: price,
+            // Si seleccionó una existente, mandamos ID. Si no, mandamos nombre para crear.
+            prenda_id: selectedPrenda?.id || (exactMatch?.id) || null,
+            nombre_prenda: (!selectedPrenda && !exactMatch) ? searchTerm : null
+        };
+        handleSavePrecioPrenda(payload);
+        
+        // Reset local
+        setSearchTerm('');
+        setSelectedPrenda(null);
+        setPrice('');
+    };
+
+    return (
+        <ModalContainer title={`Catálogo: ${modalPrecios.data?.nombre}`} onClose={() => setModalPrecios({ open: false, data: null })}>
+          <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg flex gap-3 border border-purple-100 dark:border-purple-800">
+            <CurrencyDollarIcon className="w-6 h-6 text-purple-600 flex-shrink-0" />
+            <div className="text-sm text-purple-800 dark:text-purple-300">
+                Gestiona qué prendas acepta este servicio y su precio específico.
+            </div>
+          </div>
+
+          {/* LISTA DE PRECIOS CONFIGURADOS */}
+          <div className="max-h-48 overflow-y-auto space-y-2 mb-6 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
+            {modalPrecios.data?.precios_prendas?.length === 0 && <p className="text-center text-gray-400 text-sm py-6">No hay prendas configuradas</p>}
+            {modalPrecios.data?.precios_prendas?.map(p => (
+              <div key={p.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-2 px-3 rounded shadow-sm border border-gray-100 dark:border-gray-700 group">
+                <span className="font-medium text-sm">{p.prenda_nombre}</span>
+                <div className="flex items-center gap-3">
+                    <span className="font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded text-xs">S/ {p.precio}</span>
+                    <button 
+                        onClick={() => handleDeletePrecioPrenda(p.prenda)} 
+                        className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Eliminar del catálogo"
+                    >
+                        <TrashIcon className="h-4 w-4"/>
+                    </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* FORMULARIO DE AGREGAR (BUSCADOR/CREADOR) */}
+          <form onSubmit={handleSubmit} className="border-t border-gray-100 dark:border-gray-700 pt-4">
+            <div className="flex flex-col gap-3">
+                <div className="relative">
+                    <label className="label text-xs mb-1">Buscar o Crear Prenda</label>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none"/>
+                            <input 
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => { setSearchTerm(e.target.value); setSelectedPrenda(null); }}
+                                placeholder="Ej: Camisa, Terno, Vestido..."
+                                className="input pl-9 text-sm w-full"
+                                required
+                                autoComplete="off"
+                            />
+                            {/* SUGGESTIONS DROPDOWN */}
+                            {searchTerm && !selectedPrenda && filteredSuggestions.length > 0 && (
+                                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                    {filteredSuggestions.map(p => (
+                                        <div 
+                                            key={p.id} 
+                                            onClick={() => handleSelectPrenda(p)}
+                                            className="px-4 py-2 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-sm flex justify-between"
+                                        >
+                                            <span>{p.nombre}</span>
+                                            <span className="text-gray-400 text-xs italic">Existente</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <input 
+                            value={price}
+                            onChange={(e) => setPrice(e.target.value)}
+                            type="number" 
+                            step="0.10" 
+                            placeholder="0.00" 
+                            className="w-24 input text-sm text-right font-bold" 
+                            required 
+                        />
+                    </div>
+                    {/* HINT VISUAL */}
+                    {searchTerm && !selectedPrenda && !exactMatch && (
+                        <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                            <PlusIcon className="h-3 w-3"/> Se creará una nueva prenda: <strong>"{searchTerm}"</strong>
+                        </p>
+                    )}
+                    {(selectedPrenda || exactMatch) && (
+                         <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                            <CheckIcon className="h-3 w-3"/> Seleccionado: <strong>{selectedPrenda?.nombre || exactMatch?.nombre}</strong>
+                        </p>
+                    )}
+                </div>
+                <button type="submit" className="btn-primary w-full shadow-sm py-2">
+                    {selectedPrenda || exactMatch ? 'Vincular Prenda' : 'Crear y Vincular'}
+                </button>
+            </div>
+          </form>
+        </ModalContainer>
+    );
+};
 
 // --- COMPONENTE PRINCIPAL (CONTROLADOR) ---
 
@@ -577,8 +713,16 @@ const Config = () => {
   const handleSavePago = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    if (!formData.has('activo')) formData.append('activo', 'False');
-    else formData.set('activo', 'True');
+    
+    // CORRECCIÓN DE BOOLEANO
+    const isActive = formData.get('activo') === 'on' ? 'True' : 'False';
+    formData.set('activo', isActive);
+
+    // CORRECCIÓN DE IMAGEN
+    const imageFile = formData.get('imagen_qr');
+    if (imageFile instanceof File && imageFile.size === 0) {
+        formData.delete('imagen_qr');
+    }
 
     const config = { headers: { 'Content-Type': 'multipart/form-data' } };
     try {
@@ -593,6 +737,7 @@ const Config = () => {
       const res = await axios.get('/pagos/config/');
       setMetodosPago(res.data.results);
     } catch (error) {
+      console.error(error);
       toast.error("Error guardando método de pago");
     }
   };
@@ -618,22 +763,47 @@ const Config = () => {
     }
   };
 
-  const handleSavePrecioPrenda = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const data = Object.fromEntries(formData.entries());
+  // NUEVO HANDLER INTELIGENTE PARA PRECIOS
+  const handleSavePrecioPrenda = async (payload) => {
     try {
-      await axios.post(`/servicios/${modalPrecios.data.id}/establecer_precio_prenda/`, data);
-      toast.success("Precio agregado");
-      const res = await axios.get('/servicios/');
-      setServicios(res.data.results);
-      const updatedService = res.data.results.find(s => s.id === modalPrecios.data.id);
+      // payload ya viene estructurado desde el componente ModalPreciosManager
+      await axios.post(`/servicios/${modalPrecios.data.id}/establecer_precio_prenda/`, payload);
+      
+      toast.success("Catálogo actualizado");
+      
+      // Recargar datos para ver cambios reflejados (prendas nuevas y lista de precios)
+      const [resServicios, resPrendas] = await Promise.all([
+          axios.get('/servicios/'),
+          axios.get('/prendas/')
+      ]);
+      setServicios(resServicios.data.results);
+      setPrendas(resPrendas.data.results);
+
+      // Actualizar modal con la data nueva
+      const updatedService = resServicios.data.results.find(s => s.id === modalPrecios.data.id);
       setModalPrecios({ open: true, data: updatedService });
-      e.target.reset();
+      
     } catch (error) {
+      console.error(error);
       toast.error("Error al guardar precio");
     }
   };
+
+  const handleDeletePrecioPrenda = async (prendaId) => {
+      if(!window.confirm("¿Quitar esta prenda del catálogo de este servicio?")) return;
+      try {
+          await axios.post(`/servicios/${modalPrecios.data.id}/eliminar_precio_prenda/`, { prenda_id: prendaId });
+          toast.success("Prenda desvinculada");
+          
+          // Refrescar
+          const resServicios = await axios.get('/servicios/');
+          setServicios(resServicios.data.results);
+          const updatedService = resServicios.data.results.find(s => s.id === modalPrecios.data.id);
+          setModalPrecios({ open: true, data: updatedService });
+      } catch (error) {
+          toast.error("Error al eliminar");
+      }
+  }
 
   const handleSaveCategoria = async (e) => {
     e.preventDefault();
@@ -668,7 +838,7 @@ const Config = () => {
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden">
       {/* SIDEBAR NAVEGACIÓN */}
       <aside className="w-full lg:w-64 bg-white dark:bg-gray-800 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 flex-shrink-0 z-10 shadow-sm">
         <div className="p-6 hidden lg:block">
@@ -816,33 +986,15 @@ const Config = () => {
         </ModalContainer>
       )}
 
-      {/* MODAL PRECIOS */}
+      {/* MODAL GESTOR DE PRECIOS */}
       {modalPrecios.open && (
-        <ModalContainer title={`Precios: ${modalPrecios.data?.nombre}`} onClose={() => setModalPrecios({ open: false, data: null })}>
-          <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg flex gap-3 border border-purple-100 dark:border-purple-800">
-            <CurrencyDollarIcon className="w-6 h-6 text-purple-600 flex-shrink-0" />
-            <div className="text-sm text-purple-800 dark:text-purple-300">
-                Define precios específicos por prenda para este servicio.
-            </div>
-          </div>
-          <div className="max-h-56 overflow-y-auto space-y-2 mb-4 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
-            {modalPrecios.data?.precios_prendas?.length === 0 && <p className="text-center text-gray-400 text-sm py-6">No hay precios definidos</p>}
-            {modalPrecios.data?.precios_prendas?.map(p => (
-              <div key={p.id} className="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded shadow-sm border border-gray-100 dark:border-gray-700">
-                <span className="font-medium">{p.prenda_nombre}</span>
-                <span className="font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded text-sm">S/ {p.precio}</span>
-              </div>
-            ))}
-          </div>
-          <form onSubmit={handleSavePrecioPrenda} className="flex gap-2 border-t border-gray-100 dark:border-gray-700 pt-4">
-            <select name="prenda" className="flex-1 input text-sm" required>
-              <option value="">Seleccionar prenda...</option>
-              {prendas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-            </select>
-            <input name="precio" type="number" step="0.10" placeholder="0.00" className="w-24 input text-sm text-right" required />
-            <button className="bg-blue-600 text-white px-4 rounded-lg hover:bg-blue-700 font-bold shadow-sm">+</button>
-          </form>
-        </ModalContainer>
+        <ModalPreciosManager 
+            modalPrecios={modalPrecios} 
+            setModalPrecios={setModalPrecios}
+            prendas={prendas}
+            handleSavePrecioPrenda={handleSavePrecioPrenda}
+            handleDeletePrecioPrenda={handleDeletePrecioPrenda}
+        />
       )}
 
       {/* MODAL CATEGORIA */}

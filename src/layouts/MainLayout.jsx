@@ -118,7 +118,10 @@ const MainLayout = () => {
 
             {/* CONTENIDO PRINCIPAL */}
             <main className="flex-1 overflow-hidden relative flex flex-col bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
-                <div className="flex-1 overflow-auto">
+                {/* Añadido 'h-full' para asegurar que el contenido (Outlet) tome todo el alto disponible.
+                   Esto permite que componentes como Config.jsx (que usan h-full) se expandan correctamente.
+                */}
+                <div className="flex-1 overflow-auto h-full">
                     <Outlet />
                 </div>
             </main>

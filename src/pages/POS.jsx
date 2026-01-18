@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Minus, CreditCard, UserPlus, Grid, Save, Loader, AlertCircle, X, Clock, FileText, Printer, CheckCircle, Wallet, DollarSign, MapPin, Truck, Store, AlertTriangle, User, Phone, Mail, Map } from 'lucide-react';
+import { 
+    Search, Plus, Minus, CreditCard, UserPlus, Grid, Save, Loader, AlertCircle, X, 
+    Clock, FileText, Printer, CheckCircle, Wallet, DollarSign, MapPin, Truck, Store, 
+    AlertTriangle, User, Phone, Mail, Map, Tag 
+} from 'lucide-react';
 import api from '../api/axiosConfig';
 
 const POS = () => {
@@ -25,9 +29,19 @@ const POS = () => {
     const [paymentAmount, setPaymentAmount] = useState(''); 
     const [paymentMethod, setPaymentMethod] = useState('EFECTIVO'); 
 
-    // --- MODALES (NUEVO SISTEMA UNIFICADO) ---
+    // --- MODALES ---
     const [createdTicket, setCreatedTicket] = useState(null);
     const [showClientModal, setShowClientModal] = useState(false);
+    
+    // NUEVO: Modal de selección de prendas
+    const [modalPrendas, setModalPrendas] = useState({
+        show: false,
+        service: null,
+        loading: false,
+        items: [], // Lista de precios configurados para este servicio
+        searchTerm: ''
+    });
+
     const [infoModal, setInfoModal] = useState({ 
         show: false, title: '', message: '', type: 'info', action: null, confirmText: 'Entendido', showCancel: false
     });
@@ -92,30 +106,97 @@ const POS = () => {
     }, [clientSearch]);
 
     // CÁLCULOS
-    const total = cart.reduce((acc, item) => acc + (item.precio_base * (parseFloat(item.qty) || 0)), 0);
+    const total = cart.reduce((acc, item) => acc + (item.precio_unitario * (parseFloat(item.qty) || 0)), 0);
 
     useEffect(() => {
         if (paymentStatus === 'PAGADO') setPaymentAmount(total.toFixed(2)); 
         else if (paymentStatus === 'PENDIENTE') setPaymentAmount(''); 
     }, [paymentStatus, total]);
 
-    // LÓGICA CARRITO
-    const addToCart = (service) => {
+    // --- LÓGICA CARRITO Y SELECCIÓN ---
+
+    // 1. Manejador de Click en Servicio (Dispatcher)
+    const handleServiceClick = async (service) => {
+        if (service.tipo_cobro === 'POR_PRENDA') {
+            // ABRIR MODAL DE PRENDAS
+            setModalPrendas({
+                show: true,
+                service: service,
+                loading: true,
+                items: [],
+                searchTerm: ''
+            });
+
+            try {
+                // Obtenemos el detalle completo del servicio que incluye 'precios_prendas'
+                // OJO: Ajusta esto si tu backend requiere un endpoint diferente
+                const response = await api.get(`servicios/${service.id}/`);
+                setModalPrendas(prev => ({
+                    ...prev,
+                    loading: false,
+                    items: response.data.precios_prendas || []
+                }));
+            } catch (error) {
+                console.error(error);
+                showInfo("Error", "No se pudo cargar el catálogo de prendas.", "error");
+                setModalPrendas(prev => ({ ...prev, show: false }));
+            }
+
+        } else {
+            // FLUJO NORMAL (Kilo, Unidad, etc.)
+            addToCart(service);
+        }
+    };
+
+    // 2. Agregar al Carrito (Core)
+    const addToCart = (service, prendaEspecifica = null) => {
         setCart(prev => {
-            if (prev.find(i => i.id === service.id)) return prev;
+            // Generar un ID único para el ítem en el carrito
+            // Si es prenda específica: "ID_SERVICIO-ID_PRENDA"
+            // Si es normal: "ID_SERVICIO"
+            const uniqueCartId = prendaEspecifica 
+                ? `${service.id}-${prendaEspecifica.prenda}` 
+                : `${service.id}`;
+
+            // Verificar si ya existe este item exacto
+            if (prev.find(i => i.cartId === uniqueCartId)) return prev;
+
+            // Determinar valores
+            const nombreItem = prendaEspecifica 
+                ? `${service.nombre} - ${prendaEspecifica.prenda_nombre}` 
+                : service.nombre;
+            
+            const precioFinal = prendaEspecifica 
+                ? parseFloat(prendaEspecifica.precio) 
+                : parseFloat(service.precio_base);
+
+            const descripcionInicial = prendaEspecifica 
+                ? prendaEspecifica.prenda_nombre // Autocompletar detalle con nombre de la prenda
+                : '';
+
             return [...prev, { 
-                id: service.id, nombre: service.nombre, precio_base: parseFloat(service.precio_base),
-                qty: '', description: ''   
+                cartId: uniqueCartId, // ID virtual para el frontend
+                serviceId: service.id, // ID real del servicio para el backend
+                nombre: nombreItem, 
+                precio_unitario: precioFinal,
+                qty: '', 
+                description: descripcionInicial,
+                es_prenda: !!prendaEspecifica
             }];
         });
+        
+        // Cerrar modal si estaba abierto
+        if (prendaEspecifica) {
+            setModalPrendas(prev => ({ ...prev, show: false }));
+        }
         setValidationError(null);
     };
 
-    const updateItem = (id, field, value) => {
-        setCart(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+    const updateItem = (cartId, field, value) => {
+        setCart(prev => prev.map(item => item.cartId === cartId ? { ...item, [field]: value } : item));
     };
 
-    const removeFromCart = (id) => setCart(prev => prev.filter(item => item.id !== id));
+    const removeFromCart = (cartId) => setCart(prev => prev.filter(item => item.cartId !== cartId));
 
     // --- CREAR CLIENTE ---
     const handleCreateClient = async (e) => {
@@ -156,7 +237,7 @@ const POS = () => {
         
         const missingDesc = cart.find(item => !item.description || item.description.trim() === '');
         if (missingDesc) {
-            setValidationError(missingDesc.id); 
+            setValidationError(missingDesc.cartId); 
             showInfo("Detalle Requerido", `El detalle es OBLIGATORIO para: ${missingDesc.nombre}`, "warning");
             return;
         }
@@ -190,9 +271,9 @@ const POS = () => {
             pago_monto: montoEnviar,
             metodo_pago: paymentMethod,
             items: cart.map(item => ({
-                servicio: item.id,
+                servicio: item.serviceId, // Usamos el ID real del servicio
                 cantidad: parseFloat(item.qty),
-                precio_unitario: item.precio_base,
+                precio_unitario: item.precio_unitario,
                 descripcion: item.description 
             }))
         };
@@ -254,7 +335,7 @@ const POS = () => {
                             <tr>
                                 <td>${item.qty}</td>
                                 <td><strong>${item.nombre}</strong><br><span style="font-size:10px;">${item.description || ''}</span></td>
-                                <td class="text-right">${((parseFloat(item.qty)||0) * item.precio_base).toFixed(2)}</td>
+                                <td class="text-right">${((parseFloat(item.qty)||0) * item.precio_unitario).toFixed(2)}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -308,6 +389,63 @@ const POS = () => {
                 </div>
             )}
 
+            {/* MODAL SELECCIÓN DE PRENDAS (NUEVO) */}
+            {modalPrendas.show && (
+                <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700">
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 rounded-t-2xl">
+                            <div>
+                                <h3 className="font-bold text-lg dark:text-white">{modalPrendas.service?.nombre}</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Seleccione la prenda específica</p>
+                            </div>
+                            <button onClick={() => setModalPrendas({ ...modalPrendas, show: false })} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+                             <div className="relative">
+                                <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                                <input 
+                                    type="text"
+                                    autoFocus
+                                    placeholder="Buscar prenda (ej. Camisa, Pantalón)..."
+                                    value={modalPrendas.searchTerm}
+                                    onChange={(e) => setModalPrendas({...modalPrendas, searchTerm: e.target.value})}
+                                    className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-2">
+                            {modalPrendas.loading ? (
+                                <div className="flex justify-center py-10"><Loader className="animate-spin text-blue-600" /></div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-2">
+                                    {modalPrendas.items
+                                        .filter(item => item.prenda_nombre.toLowerCase().includes(modalPrendas.searchTerm.toLowerCase()))
+                                        .map(item => (
+                                        <button 
+                                            key={item.id}
+                                            onClick={() => addToCart(modalPrendas.service, item)}
+                                            className="flex justify-between items-center p-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-100 dark:hover:border-blue-800 transition-all text-left group"
+                                        >
+                                            <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-300">{item.prenda_nombre}</span>
+                                            <span className="font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/40 px-2 py-1 rounded-lg text-sm">S/ {item.precio}</span>
+                                        </button>
+                                    ))}
+                                    {modalPrendas.items.length === 0 && !modalPrendas.loading && (
+                                        <div className="text-center py-8 text-gray-400 text-sm">
+                                            No hay prendas configuradas.<br/>Vaya a Configuración &gt; Servicios.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* MODAL CREAR CLIENTE */}
             {showClientModal && (
                 <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
@@ -322,7 +460,6 @@ const POS = () => {
                         </div>
 
                         <form onSubmit={handleCreateClient} className="space-y-4">
-                            {/* ... (Mismo formulario anterior) ... */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 mb-1">Tipo Doc.</label>
@@ -453,12 +590,21 @@ const POS = () => {
                 <div className="flex-1 overflow-y-auto pr-1">
                     <div className="grid grid-cols-3 gap-3 content-start">
                         {filteredServices.map(service => (
-                            <button key={service.id} onClick={() => addToCart(service)} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-lg dark:hover:shadow-blue-500/10 text-left h-32 flex flex-col justify-between group active:scale-95 transition-all relative overflow-hidden">
+                            <button 
+                                key={service.id} 
+                                // CAMBIO: Usamos handleServiceClick en lugar de addToCart directo
+                                onClick={() => handleServiceClick(service)} 
+                                className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-lg dark:hover:shadow-blue-500/10 text-left h-32 flex flex-col justify-between group active:scale-95 transition-all relative overflow-hidden"
+                            >
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-blue-50 dark:bg-blue-900/10 rounded-bl-full -mr-8 -mt-8 transition-colors group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30"></div>
                                 <span className="font-bold line-clamp-2 text-sm text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 z-10">{service.nombre}</span>
                                 <div className="flex justify-between items-end z-10">
                                     <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded font-mono">{service.codigo}</span>
-                                    <span className="font-black text-xl text-blue-600 dark:text-blue-400">S/ {parseFloat(service.precio_base).toFixed(2)}</span>
+                                    {service.tipo_cobro === 'POR_PRENDA' ? (
+                                        <span className="font-black text-xs text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded">POR PRENDA</span>
+                                    ) : (
+                                        <span className="font-black text-xl text-blue-600 dark:text-blue-400">S/ {parseFloat(service.precio_base).toFixed(2)}</span>
+                                    )}
                                 </div>
                             </button>
                         ))}
@@ -485,20 +631,20 @@ const POS = () => {
                             <p>Ticket vacío</p>
                         </div>
                     ) : cart.map(item => (
-                        <div key={item.id} className={`bg-white dark:bg-gray-700 border p-3 rounded-xl shadow-sm flex flex-col gap-2 transition-all 
-                            ${validationError === item.id ? 'border-red-500 ring-1 ring-red-500 dark:border-red-500' : 'border-gray-100 dark:border-gray-600'}`}>
+                        <div key={item.cartId} className={`bg-white dark:bg-gray-700 border p-3 rounded-xl shadow-sm flex flex-col gap-2 transition-all 
+                            ${validationError === item.cartId ? 'border-red-500 ring-1 ring-red-500 dark:border-red-500' : 'border-gray-100 dark:border-gray-600'}`}>
                             <div className="flex justify-between items-start">
                                 <span className="font-bold text-sm w-3/4 text-gray-800 dark:text-white">{item.nombre}</span>
-                                <button onClick={() => removeFromCart(item.id)} className="text-gray-300 hover:text-red-500 transition-colors"><X size={16}/></button>
+                                <button onClick={() => removeFromCart(item.cartId)} className="text-gray-300 hover:text-red-500 transition-colors"><X size={16}/></button>
                             </div>
                             
                             <input 
                                 type="text" 
                                 placeholder="⚠️ Detalle OBLIGATORIO (Ej. Color, Marca)" 
                                 value={item.description} 
-                                onChange={(e) => updateItem(item.id, 'description', e.target.value)} 
+                                onChange={(e) => updateItem(item.cartId, 'description', e.target.value)} 
                                 className={`w-full text-xs border-b bg-transparent outline-none pb-1 transition-colors
-                                    ${validationError === item.id 
+                                    ${validationError === item.cartId 
                                         ? 'border-red-400 placeholder-red-400 text-red-600' 
                                         : 'border-gray-200 dark:border-gray-600 focus:border-blue-500 text-gray-600 dark:text-gray-300 placeholder-gray-400'}`}
                             />
@@ -509,12 +655,12 @@ const POS = () => {
                                         type="number" 
                                         placeholder="0" 
                                         value={item.qty} 
-                                        onChange={(e) => updateItem(item.id, 'qty', e.target.value)} 
+                                        onChange={(e) => updateItem(item.cartId, 'qty', e.target.value)} 
                                         className="w-12 text-center bg-transparent font-bold outline-none text-gray-800 dark:text-white placeholder-gray-300"
                                     />
                                     <span className="text-[10px] text-gray-400 dark:text-gray-300 font-medium">unid/kg</span>
                                 </div>
-                                <span className="font-black text-gray-900 dark:text-white">S/ {((parseFloat(item.qty)||0) * item.precio_base).toFixed(2)}</span>
+                                <span className="font-black text-gray-900 dark:text-white">S/ {((parseFloat(item.qty)||0) * item.precio_unitario).toFixed(2)}</span>
                             </div>
                         </div>
                     ))}
