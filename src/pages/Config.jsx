@@ -18,7 +18,10 @@ import {
   CheckIcon,
   SparklesIcon,
   ArrowPathIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  UserIcon,
+  KeyIcon,
+  EnvelopeIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
@@ -64,7 +67,8 @@ const TabNegocio = ({
             ) : (
               <div className="flex gap-2">
                 <button onClick={() => setEditMode(false)} className="btn-danger">Cancelar</button>
-                <button onClick={handleGuardar} disabled={loading} className="btn-primary">
+                {/* CORRECCIÓN: Ahora setEditMode(false) se ejecuta al guardar */}
+                <button onClick={() => { handleGuardar(); setEditMode(false); }} disabled={loading} className="btn-primary">
                   {loading ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
@@ -274,7 +278,6 @@ const TabPagos = ({ metodosPago, setModalPago }) => (
 
 const TabServicios = ({ servicios, categorias, setModalServicio, setModalCategoria, setModalPrecios }) => (
   <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-    {/* SIDEBAR: CATEGORÍAS */}
     <div className="lg:col-span-1 h-full">
       <div className="card h-full p-4">
         <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100 dark:border-gray-700">
@@ -297,7 +300,6 @@ const TabServicios = ({ servicios, categorias, setModalServicio, setModalCategor
       </div>
     </div>
 
-    {/* TABLA SERVICIOS */}
     <div className="lg:col-span-3">
       <div className="card">
         <SectionHeader 
@@ -365,8 +367,6 @@ const TabServicios = ({ servicios, categorias, setModalServicio, setModalCategor
   </div>
 );
 
-// --- TABS ACTUALIZADOS: CORRECCIÓN DE COLOR (RESTORE GRAY) ---
-
 const TabTickets = ({ empresa, setEmpresa, editMode, setEditMode, handleGuardar }) => (
   <div className="max-w-3xl mx-auto">
     <div className="card p-8">
@@ -396,7 +396,6 @@ const TabTickets = ({ empresa, setEmpresa, editMode, setEditMode, handleGuardar 
                 disabled={!editMode}
                 value={empresa?.ticket_prefijo || 'TK-'} 
                 onChange={e => setEmpresa({...empresa, ticket_prefijo: e.target.value})}
-                // SE ELIMINÓ COLOR EXPLICITO PARA USAR EL GRIS DEL TEMA
                 className={!editMode ? 'input-readonly text-sm' : 'input text-sm'} 
             />
           </div>
@@ -427,13 +426,103 @@ const TabTickets = ({ empresa, setEmpresa, editMode, setEditMode, handleGuardar 
   </div>
 );
 
-const TabUsuarios = () => (
-  <div className="card text-center py-16 bg-gray-50 dark:bg-gray-800 border-dashed">
-    <UserGroupIcon className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-    <h3 className="text-lg font-bold text-gray-600 dark:text-gray-400">Módulo de Usuarios</h3>
-    <p className="text-gray-500 mt-2">Próximamente podrás gestionar roles y permisos aquí.</p>
-  </div>
-);
+// --- NUEVO COMPONENTE: TAB USUARIOS ---
+const TabUsuarios = ({ usuarios, sedes, setModalUsuario, handleDeleteUsuario }) => {
+    
+    // Función auxiliar para color del rol
+    const getRoleBadge = (rol) => {
+        switch(rol) {
+            case 'ADMIN': return 'bg-purple-50 text-purple-700 border-purple-100';
+            case 'CAJERO': return 'bg-blue-50 text-blue-700 border-blue-100';
+            default: return 'bg-gray-100 text-gray-700 border-gray-200';
+        }
+    };
+
+    const getRoleLabel = (rol) => {
+        switch(rol) {
+            case 'ADMIN': return 'Administrador';
+            case 'CAJERO': return 'Cajero';
+            default: return 'Operario';
+        }
+    };
+
+    return (
+        <div className="card">
+            <SectionHeader 
+                title="Equipo de Trabajo" 
+                icon={UserGroupIcon}
+                actionButton={
+                    <button onClick={() => setModalUsuario({ open: true, data: null })} className="btn-primary">
+                        <PlusIcon className="h-5 w-5" /> Nuevo Usuario
+                    </button>
+                }
+            />
+            
+            <div className="table-container">
+                <table className="w-full">
+                    <thead>
+                        <tr>
+                            <th className="th">Usuario / Email</th>
+                            <th className="th">Rol</th>
+                            <th className="th">Sede Asignada</th>
+                            <th className="th text-center">Estado</th>
+                            <th className="th text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {usuarios.length === 0 && (
+                             <tr><td colSpan="5" className="td text-center text-gray-500 py-8">No hay usuarios registrados</td></tr>
+                        )}
+                        {usuarios.map(u => (
+                            <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td className="td">
+                                    <div className="flex items-center gap-3">
+                                        <div>
+                                            <div className="font-bold text-gray-900 dark:text-white">{u.first_name} {u.last_name}</div>
+                                            <div className="text-xs text-gray-500 font-mono">@{u.username}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="td">
+                                    <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${getRoleBadge(u.rol)}`}>
+                                        {getRoleLabel(u.rol)}
+                                    </span>
+                                </td>
+                                <td className="td">
+                                    {u.nombre_sede ? (
+                                        <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                                            <MapPinIcon className="w-4 h-4 text-gray-400"/>
+                                            <span className="text-sm font-medium">{u.nombre_sede}</span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-gray-400 italic">Acceso Global</span>
+                                    )}
+                                </td>
+                                <td className="td text-center">
+                                    {u.is_active ? (
+                                        <span className="inline-flex w-2 h-2 rounded-full bg-green-500"></span>
+                                    ) : (
+                                        <span className="inline-flex w-2 h-2 rounded-full bg-red-500"></span>
+                                    )}
+                                </td>
+                                <td className="td">
+                                    <div className="flex justify-end gap-2">
+                                        <button onClick={() => setModalUsuario({ open: true, data: u })} className="btn-icon">
+                                            <PencilIcon className="h-4 w-4"/>
+                                        </button>
+                                        <button onClick={() => handleDeleteUsuario(u.id)} className="btn-icon text-red-500 hover:bg-red-50">
+                                            <TrashIcon className="h-4 w-4"/>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
 
 const TabInventario = ({ empresa, setEmpresa, editMode, setEditMode, handleGuardar }) => (
   <div className="card max-w-xl mx-auto">
@@ -650,6 +739,7 @@ const Config = () => {
   const [servicios, setServicios] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [prendas, setPrendas] = useState([]); 
+  const [usuarios, setUsuarios] = useState([]); // NUEVO ESTADO
   
   // --- ESTADOS DE UI ---
   const [loading, setLoading] = useState(false);
@@ -665,6 +755,7 @@ const Config = () => {
   const [modalServicio, setModalServicio] = useState({ open: false, data: null });
   const [modalPrecios, setModalPrecios] = useState({ open: false, data: null });
   const [modalCategoria, setModalCategoria] = useState({ open: false, data: null });
+  const [modalUsuario, setModalUsuario] = useState({ open: false, data: null }); // NUEVO MODAL
 
   // --- CARGA INICIAL ---
   useEffect(() => {
@@ -674,13 +765,14 @@ const Config = () => {
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      const [resEmpresa, resSedes, resPagos, resCats, resServicios, resPrendas] = await Promise.all([
+      const [resEmpresa, resSedes, resPagos, resCats, resServicios, resPrendas, resUsuarios] = await Promise.all([
         axios.get('/core/empresa/'),
         axios.get('/core/sedes/'),
         axios.get('/pagos/config/'),
         axios.get('/categorias-servicio/'),
         axios.get('/servicios/'),
-        axios.get('/prendas/')
+        axios.get('/prendas/'),
+        axios.get('/usuarios/') // NUEVO ENDPOINT
       ]);
 
       if (resEmpresa.data.results && resEmpresa.data.results.length > 0) {
@@ -694,6 +786,7 @@ const Config = () => {
       setCategorias(resCats.data.results || []);
       setServicios(resServicios.data.results || []);
       setPrendas(resPrendas.data.results || []);
+      setUsuarios(resUsuarios.data.results || []); // SET USUARIOS
     } catch (error) {
       console.error("Error cargando configuración", error);
       toast.error("Error al cargar datos del sistema");
@@ -757,17 +850,12 @@ const Config = () => {
   const handleSavePago = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    
-    // CORRECCIÓN DE BOOLEANO
     const isActive = formData.get('activo') === 'on' ? 'True' : 'False';
     formData.set('activo', isActive);
-
-    // CORRECCIÓN DE IMAGEN
     const imageFile = formData.get('imagen_qr');
     if (imageFile instanceof File && imageFile.size === 0) {
         formData.delete('imagen_qr');
     }
-
     const config = { headers: { 'Content-Type': 'multipart/form-data' } };
     try {
       if (modalPago.data) {
@@ -862,6 +950,66 @@ const Config = () => {
       toast.error("Error guardando categoría");
     }
   };
+  
+// --- CORRECCIÓN EN CONFIG.JSX ---
+  
+  const handleSaveUsuario = async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      
+      // Estructura PLANA para el serializer (sin anidar en 'perfil')
+      const payload = {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          password: data.password, // Puede estar vacío en edit
+          rol: data.rol,           // Enviamos directo
+          sede_id: data.sede ? parseInt(data.sede) : null // Enviamos como 'sede_id' y convertimos a null si está vacío
+      };
+
+      // Si es update, eliminamos password si está vacío
+      if (modalUsuario.data && !data.password) {
+          delete payload.password;
+      }
+      // Validacion de seguridad para creación
+      if (!modalUsuario.data && !payload.password) {
+          return toast.error("La contraseña es obligatoria al crear");
+      }
+
+      try {
+          if (modalUsuario.data) {
+              await axios.patch(`/usuarios/${modalUsuario.data.id}/`, payload);
+              toast.success("Usuario actualizado");
+          } else {
+              await axios.post('/usuarios/', payload);
+              toast.success("Usuario creado: " + data.first_name);
+          }
+          setModalUsuario({ open: false, data: null });
+          // Recargar lista
+          const res = await axios.get('/usuarios/');
+          setUsuarios(res.data.results);
+      } catch (error) {
+          console.error(error);
+          // Mostrar mensaje de error específico del backend si existe
+          const errorMsg = error.response?.data?.email?.[0] || 
+                           error.response?.data?.rol?.[0] || 
+                           "Error guardando usuario";
+          toast.error(errorMsg);
+      }
+  };
+
+  const handleDeleteUsuario = async (id) => {
+      if (!window.confirm("¿Desactivar este usuario? Ya no podrá acceder al sistema.")) return;
+      try {
+          await axios.delete(`/usuarios/${id}/`);
+          toast.success("Usuario desactivado");
+          const res = await axios.get('/usuarios/');
+          setUsuarios(res.data.results);
+      } catch (error) {
+          toast.error("No se pudo desactivar el usuario");
+      }
+  };
 
   // --- MENU LATERAL ---
   const tabs = [
@@ -870,7 +1018,7 @@ const Config = () => {
     { id: 'pagos', label: 'Pagos', icon: CreditCardIcon },
     { id: 'servicios', label: 'Servicios', icon: TagIcon },
     { id: 'tickets', label: 'Tickets', icon: TicketIcon },
-    { id: 'usuarios', label: 'Usuarios', icon: UserGroupIcon },
+    { id: 'usuarios', label: 'Usuarios', icon: UserGroupIcon }, // AHORA FUNCIONAL
     { id: 'inventario', label: 'Inventario', icon: CubeIcon },
     { id: 'notificaciones', label: 'Notificaciones', icon: BellIcon },
   ];
@@ -941,7 +1089,14 @@ const Config = () => {
                 handleGuardar={handleGuardarEmpresa}
             />
           )}
-          {activeTab === 'usuarios' && <TabUsuarios />}
+          {activeTab === 'usuarios' && (
+              <TabUsuarios 
+                  usuarios={usuarios} 
+                  sedes={sedes}
+                  setModalUsuario={setModalUsuario}
+                  handleDeleteUsuario={handleDeleteUsuario}
+              />
+          )}
           {activeTab === 'inventario' && (
             <TabInventario 
                 empresa={empresa} 
@@ -1059,6 +1214,74 @@ const Config = () => {
             <button className="btn-primary w-full">Guardar</button>
           </form>
         </ModalContainer>
+      )}
+
+      {/* NUEVO MODAL: USUARIO */}
+      {modalUsuario.open && (
+          <ModalContainer title={modalUsuario.data ? 'Editar Usuario' : 'Nuevo Usuario'} onClose={() => setModalUsuario({ open: false, data: null })}>
+              <form onSubmit={handleSaveUsuario} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="form-group">
+                          <label className="label flex items-center gap-1"><UserIcon className="w-4 h-4"/> Nombres</label>
+                          <input name="first_name" defaultValue={modalUsuario.data?.first_name} className="input" required placeholder="Ej: Juan" />
+                      </div>
+                      <div className="form-group">
+                          <label className="label flex items-center gap-1"><UserIcon className="w-4 h-4"/> Apellidos</label>
+                          <input name="last_name" defaultValue={modalUsuario.data?.last_name} className="input" required placeholder="Ej: Perez" />
+                      </div>
+                  </div>
+                  
+                  <div className="form-group">
+                      <label className="label flex items-center gap-1"><EnvelopeIcon className="w-4 h-4"/> Correo Electrónico</label>
+                      <input type="email" name="email" defaultValue={modalUsuario.data?.email} className="input" required placeholder="usuario@empresa.com" />
+                  </div>
+
+                  <div className="form-group">
+                      <label className="label flex items-center gap-1">
+                          <KeyIcon className="w-4 h-4"/> Contraseña
+                          {modalUsuario.data && <span className="text-xs font-normal text-gray-400 ml-2">(Dejar vacía para mantener)</span>}
+                      </label>
+                      <input 
+                          type="password" 
+                          name="password" 
+                          className="input" 
+                          required={!modalUsuario.data} // Solo obligatoria al crear
+                          placeholder={modalUsuario.data ? "••••••••" : "Crear contraseña"}
+                      />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="form-group">
+                          <label className="label">Rol en el Negocio</label>
+                          <select name="rol" defaultValue={modalUsuario.data?.rol || 'OPERARIO'} className="input">
+                              <option value="ADMIN">Administrador</option>
+                              <option value="CAJERO">Cajero</option>
+                              <option value="OPERARIO">Operario</option>
+                          </select>
+                      </div>
+                      <div className="form-group">
+                          <label className="label">Sede Asignada</label>
+                          <select name="sede" defaultValue={modalUsuario.data?.sede_id || ""} className="input">
+                              <option value="">-- Acceso Global --</option>
+                              {sedes.map(s => (
+                                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                              ))}
+                          </select>
+                          <p className="text-[10px] text-gray-400 mt-1">Si está vacío, puede acceder a todas.</p>
+                      </div>
+                  </div>
+                  
+                  {!modalUsuario.data && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-800 dark:text-blue-300">
+                          El <strong>Usuario</strong> se generará automáticamente (Ej: jperez).
+                      </div>
+                  )}
+
+                  <button className="btn-primary w-full mt-2">
+                      {modalUsuario.data ? 'Actualizar Usuario' : 'Crear Usuario'}
+                  </button>
+              </form>
+          </ModalContainer>
       )}
     </div>
   );
