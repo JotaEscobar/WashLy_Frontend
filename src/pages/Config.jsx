@@ -18,8 +18,7 @@ import {
   CheckIcon,
   SparklesIcon,
   ArrowPathIcon,
-  MagnifyingGlassIcon,
-  ExclamationCircleIcon
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
@@ -366,27 +365,62 @@ const TabServicios = ({ servicios, categorias, setModalServicio, setModalCategor
   </div>
 );
 
-const TabTickets = () => (
+// --- TABS ACTUALIZADOS: CORRECCIÓN DE COLOR (RESTORE GRAY) ---
+
+const TabTickets = ({ empresa, setEmpresa, editMode, setEditMode, handleGuardar }) => (
   <div className="max-w-3xl mx-auto">
     <div className="card p-8">
-      <SectionHeader title="Configuración de Tickets" icon={TicketIcon} />
+      <SectionHeader 
+        title="Configuración de Tickets" 
+        icon={TicketIcon}
+        actionButton={
+            !editMode ? (
+              <button onClick={() => setEditMode(true)} className="btn-secondary">
+                <PencilIcon className="h-4 w-4" /> Editar Configuración
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => setEditMode(false)} className="btn-danger">Cancelar</button>
+                <button onClick={() => { handleGuardar(); setEditMode(false); }} className="btn-primary">
+                  Guardar Cambios
+                </button>
+              </div>
+            )
+        }
+      />
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-6">
           <div className="form-group">
             <label className="label">Prefijo Ticket</label>
-            <input defaultValue="TK-" className="input" />
+            <input 
+                disabled={!editMode}
+                value={empresa?.ticket_prefijo || 'TK-'} 
+                onChange={e => setEmpresa({...empresa, ticket_prefijo: e.target.value})}
+                // SE ELIMINÓ COLOR EXPLICITO PARA USAR EL GRIS DEL TEMA
+                className={!editMode ? 'input-readonly text-sm' : 'input text-sm'} 
+            />
           </div>
           <div className="form-group">
-            <label className="label">Días Entrega</label>
-            <input type="number" defaultValue="2" className="input" />
+            <label className="label">Días Entrega (Defecto)</label>
+            <input 
+                type="number" 
+                disabled={!editMode}
+                value={empresa?.ticket_dias_entrega || 2} 
+                onChange={e => setEmpresa({...empresa, ticket_dias_entrega: e.target.value})}
+                className={!editMode ? 'input-readonly text-sm' : 'input text-sm'} 
+            />
           </div>
         </div>
         <div className="form-group">
           <label className="label">Mensaje al Pie</label>
-          <textarea className="input min-h-[100px] py-3" rows="3" placeholder="Gracias por su preferencia..."></textarea>
-        </div>
-        <div className="pt-4">
-          <button className="btn-primary w-full">Guardar Configuración</button>
+          <textarea 
+            disabled={!editMode}
+            value={empresa?.ticket_mensaje_pie || ''} 
+            onChange={e => setEmpresa({...empresa, ticket_mensaje_pie: e.target.value})}
+            className={!editMode ? 'input-readonly min-h-[100px] py-3 text-sm' : 'input min-h-[100px] py-3 text-sm'} 
+            rows="3" 
+            placeholder="Ej: Gracias por su preferencia..."
+          ></textarea>
         </div>
       </div>
     </div>
@@ -401,19 +435,36 @@ const TabUsuarios = () => (
   </div>
 );
 
-const TabInventario = ({ empresa, setEmpresa, handleGuardar }) => (
+const TabInventario = ({ empresa, setEmpresa, editMode, setEditMode, handleGuardar }) => (
   <div className="card max-w-xl mx-auto">
-    <SectionHeader title="Ajustes de Inventario" icon={CubeIcon} />
+    <SectionHeader 
+        title="Ajustes de Inventario" 
+        icon={CubeIcon} 
+        actionButton={
+            !editMode ? (
+              <button onClick={() => setEditMode(true)} className="btn-secondary text-sm">
+                <PencilIcon className="h-4 w-4" /> Editar
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => setEditMode(false)} className="btn-danger text-sm">Cancelar</button>
+                <button onClick={() => { handleGuardar(); setEditMode(false); }} className="btn-primary text-sm">
+                  Guardar
+                </button>
+              </div>
+            )
+        }
+    />
     <div className="form-group">
       <label className="label">Stock Mínimo Global</label>
       <div className="flex gap-4">
         <input 
           type="number" 
+          disabled={!editMode}
           value={empresa?.stock_minimo_global || 10} 
           onChange={e => setEmpresa({...empresa, stock_minimo_global: parseInt(e.target.value)})}
-          className="input" 
+          className={!editMode ? 'input-readonly text-sm' : 'input text-sm'} 
         />
-        <button onClick={handleGuardar} className="btn-primary whitespace-nowrap">Guardar</button>
       </div>
       <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
         <BellIcon className="w-4 h-4"/> Alerta cuando insumos bajen de este nivel.
@@ -462,13 +513,12 @@ const ModalContainer = ({ title, onClose, children }) => (
   </div>
 );
 
-// --- COMPONENTE GESTOR DE PRECIOS POR PRENDA (NUEVO) ---
+// --- COMPONENTE GESTOR DE PRECIOS POR PRENDA ---
 const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSavePrecioPrenda, handleDeletePrecioPrenda }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedPrenda, setSelectedPrenda] = useState(null);
     const [price, setPrice] = useState('');
 
-    // Filtrar prendas (excluir las que ya tienen precio configurado en este servicio)
     const availablePrendas = useMemo(() => {
         const configuredIds = modalPrecios.data?.precios_prendas?.map(p => p.prenda) || [];
         return prendas.filter(p => !configuredIds.includes(p.id));
@@ -479,7 +529,6 @@ const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSav
         return availablePrendas.filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
     }, [searchTerm, availablePrendas]);
 
-    // Verificar si el término exacto existe (para no crear duplicados)
     const exactMatch = availablePrendas.find(p => p.nombre.toLowerCase() === searchTerm.toLowerCase().trim());
 
     const handleSelectPrenda = (prenda) => {
@@ -489,16 +538,12 @@ const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSav
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Construimos el payload manual para manejar la lógica dual
         const payload = {
             precio: price,
-            // Si seleccionó una existente, mandamos ID. Si no, mandamos nombre para crear.
             prenda_id: selectedPrenda?.id || (exactMatch?.id) || null,
             nombre_prenda: (!selectedPrenda && !exactMatch) ? searchTerm : null
         };
         handleSavePrecioPrenda(payload);
-        
-        // Reset local
         setSearchTerm('');
         setSelectedPrenda(null);
         setPrice('');
@@ -513,7 +558,6 @@ const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSav
             </div>
           </div>
 
-          {/* LISTA DE PRECIOS CONFIGURADOS */}
           <div className="max-h-48 overflow-y-auto space-y-2 mb-6 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
             {modalPrecios.data?.precios_prendas?.length === 0 && <p className="text-center text-gray-400 text-sm py-6">No hay prendas configuradas</p>}
             {modalPrecios.data?.precios_prendas?.map(p => (
@@ -533,7 +577,6 @@ const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSav
             ))}
           </div>
 
-          {/* FORMULARIO DE AGREGAR (BUSCADOR/CREADOR) */}
           <form onSubmit={handleSubmit} className="border-t border-gray-100 dark:border-gray-700 pt-4">
             <div className="flex flex-col gap-3">
                 <div className="relative">
@@ -550,7 +593,6 @@ const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSav
                                 required
                                 autoComplete="off"
                             />
-                            {/* SUGGESTIONS DROPDOWN */}
                             {searchTerm && !selectedPrenda && filteredSuggestions.length > 0 && (
                                 <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                                     {filteredSuggestions.map(p => (
@@ -576,7 +618,6 @@ const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSav
                             required 
                         />
                     </div>
-                    {/* HINT VISUAL */}
                     {searchTerm && !selectedPrenda && !exactMatch && (
                         <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
                             <PlusIcon className="h-3 w-3"/> Se creará una nueva prenda: <strong>"{searchTerm}"</strong>
@@ -612,7 +653,11 @@ const Config = () => {
   
   // --- ESTADOS DE UI ---
   const [loading, setLoading] = useState(false);
+  
+  // Modos de Edición Independientes
   const [editModeEmpresa, setEditModeEmpresa] = useState(false);
+  const [editModeTickets, setEditModeTickets] = useState(false);
+  const [editModeInventario, setEditModeInventario] = useState(false);
   
   // Modales
   const [modalSede, setModalSede] = useState({ open: false, data: null });
@@ -666,8 +711,7 @@ const Config = () => {
     setLoading(true);
     try {
       await axios.patch(`/core/empresa/${empresa.id}/`, empresa);
-      toast.success("Información de empresa actualizada");
-      setEditModeEmpresa(false);
+      toast.success("Configuración actualizada correctamente");
       fetchInitialData();
     } catch (error) {
       console.error(error);
@@ -763,15 +807,11 @@ const Config = () => {
     }
   };
 
-  // NUEVO HANDLER INTELIGENTE PARA PRECIOS
   const handleSavePrecioPrenda = async (payload) => {
     try {
-      // payload ya viene estructurado desde el componente ModalPreciosManager
       await axios.post(`/servicios/${modalPrecios.data.id}/establecer_precio_prenda/`, payload);
-      
       toast.success("Catálogo actualizado");
       
-      // Recargar datos para ver cambios reflejados (prendas nuevas y lista de precios)
       const [resServicios, resPrendas] = await Promise.all([
           axios.get('/servicios/'),
           axios.get('/prendas/')
@@ -779,7 +819,6 @@ const Config = () => {
       setServicios(resServicios.data.results);
       setPrendas(resPrendas.data.results);
 
-      // Actualizar modal con la data nueva
       const updatedService = resServicios.data.results.find(s => s.id === modalPrecios.data.id);
       setModalPrecios({ open: true, data: updatedService });
       
@@ -795,7 +834,6 @@ const Config = () => {
           await axios.post(`/servicios/${modalPrecios.data.id}/eliminar_precio_prenda/`, { prenda_id: prendaId });
           toast.success("Prenda desvinculada");
           
-          // Refrescar
           const resServicios = await axios.get('/servicios/');
           setServicios(resServicios.data.results);
           const updatedService = resServicios.data.results.find(s => s.id === modalPrecios.data.id);
@@ -894,14 +932,28 @@ const Config = () => {
               setModalPrecios={setModalPrecios}
             />
           )}
-          {activeTab === 'tickets' && <TabTickets />}
+          {activeTab === 'tickets' && (
+            <TabTickets 
+                empresa={empresa} 
+                setEmpresa={setEmpresa} 
+                editMode={editModeTickets} 
+                setEditMode={setEditModeTickets}
+                handleGuardar={handleGuardarEmpresa}
+            />
+          )}
           {activeTab === 'usuarios' && <TabUsuarios />}
-          {activeTab === 'inventario' && <TabInventario empresa={empresa} setEmpresa={setEmpresa} handleGuardar={handleGuardarEmpresa} />}
+          {activeTab === 'inventario' && (
+            <TabInventario 
+                empresa={empresa} 
+                setEmpresa={setEmpresa} 
+                editMode={editModeInventario}
+                setEditMode={setEditModeInventario}
+                handleGuardar={handleGuardarEmpresa} 
+            />
+          )}
           {activeTab === 'notificaciones' && <TabNotificaciones empresa={empresa} setEmpresa={setEmpresa} handleGuardar={handleGuardarEmpresa} />}
         </div>
       </main>
-
-      {/* --- MODALES --- */}
 
       {/* MODAL SEDE */}
       {modalSede.open && (
