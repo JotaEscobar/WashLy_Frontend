@@ -1,90 +1,95 @@
 import { createContext, useState, useContext, useEffect } from 'react';
-import api from '../api/axiosConfig';
+import { loginRequest, verifyTokenRequest } from '../api/auth'; // Asume existencia
+import Cookies from 'js-cookie';
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    // Función auxiliar para cargar perfil completo
-    const loadUserProfile = async (token) => {
-        try {
-            // Configuramos el token para estas peticiones
-            api.defaults.headers.common['Authorization'] = `Token ${token}`;
-            
-            // 1. Obtener datos de la empresa (Tenant)
-            const empresaRes = await api.get('core/empresa/');
-            const empresaData = empresaRes.data.results ? empresaRes.data.results[0] : null;
-
-            // 2. Obtener sedes permitidas
-            const sedesRes = await api.get('core/sedes/');
-            
-            return {
-                token,
-                role: localStorage.getItem('user_role') || 'admin', // Fallback temporal
-                empresa: empresaData,
-                sedes: sedesRes.data.results || [],
-                // Si el usuario ya seleccionó una sede, la mantenemos, si no, la primera
-                sedeActual: sedesRes.data.results?.[0] || null 
-            };
-        } catch (error) {
-            console.error("Error cargando perfil SaaS", error);
-            return null;
-        }
-    };
-
-    useEffect(() => {
-        const checkAuth = async () => {
-            const token = localStorage.getItem('token');
-            if (token) {
-                const userData = await loadUserProfile(token);
-                if (userData) {
-                    setUser(userData);
-                } else {
-                    // Si falla cargar perfil (ej. token expirado), logout
-                    logout();
-                }
-            }
-            setLoading(false);
-        };
-        checkAuth();
-    }, []);
-
-    const login = async (username, password) => {
-        try {
-            const response = await api.post('auth/login/', { username, password });
-            const { token } = response.data;
-            
-            localStorage.setItem('token', token);
-            localStorage.setItem('user_role', 'admin'); // Simulación temporal de rol
-            
-            const userData = await loadUserProfile(token);
-            setUser(userData);
-            
-            return { success: true };
-        } catch (error) {
-            console.error("Login error", error);
-            return { success: false, error: 'Credenciales inválidas' };
-        }
-    };
-
-    const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user_role');
-        delete api.defaults.headers.common['Authorization'];
-        setUser(null);
-    };
-
-    const setSedeActual = (sede) => {
-        setUser(prev => ({ ...prev, sedeActual: sede }));
-    };
-
-    return (
-        <AuthContext.Provider value={{ user, login, logout, loading, setSedeActual }}>
-            {!loading && children}
-        </AuthContext.Provider>
-    );
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
+  return context;
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isExpired, setIsExpired] = useState(false); // Nuevo estado
+  const [loading, setLoading] = useState(true);
+
+  // Función auxiliar para chequear vencimiento
+  const checkExpiration = (userData) => {
+    if (!userData?.empresa?.fecha_vencimiento) return false;
+    
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    // Parseo simple asumiendo formato YYYY-MM-DD del backend
+    const expiration = new Date(userData.empresa.fecha_vencimiento);
+    // Ajuste de zona horaria simple si es necesario, o usar librería como dayjs/date-fns
+    // Para este ejemplo, comparación directa UTC/Local
+    expiration.setHours(24,0,0,0); // Fin del día de vencimiento
+
+    return today > expiration;
+  };
+
+  const signin = async (userCredentials) => {
+    try {
+      const res = await loginRequest(userCredentials);
+      setUser(res.data);
+      setIsAuthenticated(true);
+      setIsExpired(checkExpiration(res.data)); // Calcular al login
+    } catch (error) {
+      console.error(error);
+      // Manejo de errores
+    }
+  };
+
+  const logout = () => {
+    Cookies.remove("token");
+    setUser(null);
+    setIsAuthenticated(false);
+    setIsExpired(false);
+  };
+
+  useEffect(() => {
+    async function checkLogin() {
+      const token = Cookies.get("token");
+      if (!token) {
+        setIsAuthenticated(false);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await verifyTokenRequest(token);
+        if (!res.data) {
+          setIsAuthenticated(false);
+          setLoading(false);
+          return;
+        }
+        
+        setUser(res.data);
+        setIsAuthenticated(true);
+        setIsExpired(checkExpiration(res.data)); // Calcular al verificar token
+        setLoading(false);
+      } catch (error) {
+        setIsAuthenticated(false);
+        setLoading(false);
+      }
+    }
+    checkLogin();
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ 
+      signin, 
+      logout, 
+      user, 
+      isAuthenticated, 
+      isExpired, 
+      loading 
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};

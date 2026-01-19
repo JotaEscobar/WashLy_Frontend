@@ -1,146 +1,79 @@
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { Menu, Moon, Sun, Home, Package, Users, Settings, LogOut, X, LayoutDashboard, CreditCard, Box } from 'lucide-react';
+import React from 'react';
+import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { PERMISSIONS, ROLES } from '../utils/permissions';
+
+// Iconos (Asumiendo Lucide o similar)
+import { LayoutDashboard, ShoppingCart, Ticket, Users, Package, CreditCard, Settings, LogOut } from 'lucide-react';
 
 const MainLayout = () => {
-    const [isSidebarOpen, setSidebarOpen] = useState(true);
-    // Inicializar estado leyendo localStorage
-    const [isDarkMode, setIsDarkMode] = useState(() => {
-        return localStorage.getItem('theme') === 'dark';
-    });
-    
-    const navigate = useNavigate();
-    const location = useLocation();
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const userRole = user?.rol || 'OPERARIO'; // Fallback seguro
 
-    // Efecto para aplicar el tema y guardar en localStorage
-    useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    }, [isDarkMode]);
+  // Definición de ítems del menú
+  const MENU_ITEMS = [
+    { label: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard />, roles: [ROLES.ADMIN] },
+    { label: 'Punto de Venta', path: '/pos', icon: <ShoppingCart />, roles: [ROLES.ADMIN, ROLES.CAJERO] },
+    { label: 'Tickets', path: '/tickets', icon: <Ticket />, roles: [ROLES.ADMIN, ROLES.CAJERO, ROLES.OPERARIO] },
+    { label: 'Clientes', path: '/clients', icon: <Users />, roles: [ROLES.ADMIN, ROLES.CAJERO] },
+    { label: 'Inventario', path: '/inventory', icon: <Package />, roles: [ROLES.ADMIN] },
+    { label: 'Pagos y Suscripción', path: '/payments', icon: <CreditCard />, roles: [ROLES.ADMIN, ROLES.CAJERO] },
+    { label: 'Configuración', path: '/config', icon: <Settings />, roles: [ROLES.ADMIN] },
+  ];
 
-    const toggleTheme = () => {
-        setIsDarkMode(!isDarkMode);
-    };
+  // Filtrado de menú según Matriz de Permisos y Rol actual
+  const allowedMenuItems = MENU_ITEMS.filter(item => item.roles.includes(userRole));
 
-    return (
-        <div className={`flex h-screen bg-gray-100 ${isDarkMode ? 'dark bg-gray-900 text-white' : ''}`}>
-            
-            {/* SIDEBAR */}
-            <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 flex flex-col relative z-20 shadow-xl`}>
-                
-                {/* Header con Menú/X */}
-                <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-700">
-                    {isSidebarOpen && (
-                        <span className="text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tighter animate-in fade-in">
-                            WASHLY
-                        </span>
-                    )}
-                    <button 
-                        onClick={() => setSidebarOpen(!isSidebarOpen)}
-                        className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-300 transition-colors ${!isSidebarOpen && 'mx-auto'}`}
-                    >
-                        {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
-                    </button>
-                </div>
-
-                {/* Navegación */}
-                <nav className="flex-1 p-3 space-y-1 overflow-y-auto mt-2">
-                    <NavItem 
-                        icon={<LayoutDashboard size={20}/>} 
-                        label="Dashboard" 
-                        isOpen={isSidebarOpen} 
-                        active={location.pathname === '/dashboard' || location.pathname === '/'} 
-                        onClick={() => navigate('/dashboard')}
-                    />
-                    <NavItem 
-                        icon={<Home size={20}/>} 
-                        label="Punto de Venta" 
-                        isOpen={isSidebarOpen} 
-                        active={location.pathname === '/pos'} 
-                        onClick={() => navigate('/pos')}
-                    />
-                    <NavItem 
-                        icon={<Package size={20}/>} 
-                        label="Tickets" 
-                        isOpen={isSidebarOpen} 
-                        active={location.pathname === '/tickets'} 
-                        onClick={() => navigate('/tickets')}
-                    />
-                    <NavItem 
-                        icon={<CreditCard size={20}/>} 
-                        label="Pagos" 
-                        isOpen={isSidebarOpen} 
-                        active={location.pathname === '/pagos'} 
-                        onClick={() => navigate('/pagos')}
-                    />
-                    <NavItem 
-                        icon={<Box size={20}/>} 
-                        label="Inventario" 
-                        isOpen={isSidebarOpen} 
-                        active={location.pathname === '/inventario'} 
-                        onClick={() => navigate('/inventario')}
-                    />
-                    <NavItem 
-                        icon={<Users size={20}/>} 
-                        label="Clientes" 
-                        isOpen={isSidebarOpen} 
-                        active={location.pathname === '/clientes'} 
-                        onClick={() => navigate('/clientes')}
-                    />
-                    <div className="pt-4 mt-4 border-t border-gray-100 dark:border-gray-700">
-                        <NavItem 
-                            icon={<Settings size={20}/>} 
-                            label="Configuración" 
-                            isOpen={isSidebarOpen} 
-                            active={location.pathname === '/config'} 
-                            onClick={() => navigate('/config')}
-                        />
-                    </div>
-                </nav>
-
-                {/* Footer */}
-                <div className="p-4 border-t border-gray-100 dark:border-gray-700 space-y-2">
-                    <button onClick={toggleTheme} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 ${!isSidebarOpen && 'justify-center'}`}>
-                        {isDarkMode ? <Sun size={20} className="text-yellow-400"/> : <Moon size={20}/>}
-                        {isSidebarOpen && <span className="font-medium text-sm">Modo {isDarkMode ? 'Claro' : 'Oscuro'}</span>}
-                    </button>
-                    <button className={`w-full flex items-center gap-3 p-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all ${!isSidebarOpen && 'justify-center'}`}>
-                        <LogOut size={20}/>
-                        {isSidebarOpen && <span className="font-medium text-sm">Salir</span>}
-                    </button>
-                </div>
-            </aside>
-
-            {/* CONTENIDO PRINCIPAL */}
-            <main className="flex-1 overflow-hidden relative flex flex-col bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
-                {/* Añadido 'h-full' para asegurar que el contenido (Outlet) tome todo el alto disponible.
-                   Esto permite que componentes como Config.jsx (que usan h-full) se expandan correctamente.
-                */}
-                <div className="flex-1 overflow-auto h-full">
-                    <Outlet />
-                </div>
-            </main>
+  return (
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white shadow-md hidden md:flex flex-col">
+        <div className="p-6 border-b">
+          <h1 className="text-2xl font-bold text-blue-600">WASHLY</h1>
+          <p className="text-xs text-gray-500 mt-1">
+            {user?.empresa?.nombre} <br/>
+            <span className="font-semibold text-gray-700">{userRole}</span>
+          </p>
         </div>
-    );
-};
 
-const NavItem = ({ icon, label, isOpen, active, onClick }) => (
-    <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all whitespace-nowrap overflow-hidden
-        ${active 
-            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' 
-            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'}
-        ${!isOpen && 'justify-center px-0'}
-    `}>
-        <div className="min-w-[20px]">{icon}</div>
-        <span className={`text-sm font-medium transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
-            {label}
-        </span>
-    </button>
-);
+        <nav className="flex-1 overflow-y-auto py-4">
+          <ul className="space-y-1 px-3">
+            {allowedMenuItems.map((item) => (
+              <li key={item.path}>
+                <Link
+                  to={item.path}
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                    location.pathname === item.path
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="mr-3">{item.icon}</span>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="p-4 border-t">
+          <button
+            onClick={logout}
+            className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            Cerrar Sesión
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto p-8">
+        <Outlet />
+      </main>
+    </div>
+  );
+};
 
 export default MainLayout;
