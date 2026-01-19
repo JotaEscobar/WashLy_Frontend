@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, useEffect } from 'react';
-import { loginRequest, verifyTokenRequest } from '../api/auth'; // Asume existencia
+import { loginRequest, verifyTokenRequest } from '../api/auth';
 import Cookies from 'js-cookie';
 
 const AuthContext = createContext();
@@ -13,42 +13,47 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isExpired, setIsExpired] = useState(false); // Nuevo estado
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState([]);
 
-  // Función auxiliar para chequear vencimiento
+  // Validar suscripción
   const checkExpiration = (userData) => {
     if (!userData?.empresa?.fecha_vencimiento) return false;
-    
     const today = new Date();
     today.setHours(0,0,0,0);
-    
-    // Parseo simple asumiendo formato YYYY-MM-DD del backend
     const expiration = new Date(userData.empresa.fecha_vencimiento);
-    // Ajuste de zona horaria simple si es necesario, o usar librería como dayjs/date-fns
-    // Para este ejemplo, comparación directa UTC/Local
-    expiration.setHours(24,0,0,0); // Fin del día de vencimiento
-
+    expiration.setHours(24,0,0,0); 
     return today > expiration;
   };
 
-  const signin = async (userCredentials) => {
+  const login = async (credentials) => {
     try {
-      const res = await loginRequest(userCredentials);
-      setUser(res.data);
+      const res = await loginRequest(credentials);
+      const userData = res.data;
+      
+      setUser(userData);
       setIsAuthenticated(true);
-      setIsExpired(checkExpiration(res.data)); // Calcular al login
+      
+      // Guardar token en Cookies para axios
+      Cookies.set("token", userData.access, { expires: 1 });
+      localStorage.setItem('washly_user', JSON.stringify(userData));
+      
+      return { success: true, role: userData.rol };
+
     } catch (error) {
       console.error(error);
-      // Manejo de errores
+      const msg = error.response?.data?.detail || "Error de credenciales";
+      setErrors([msg]);
+      return { success: false, error: msg };
     }
   };
 
   const logout = () => {
     Cookies.remove("token");
+    localStorage.removeItem("washly_user");
     setUser(null);
     setIsAuthenticated(false);
-    setIsExpired(false);
+    setErrors([]);
   };
 
   useEffect(() => {
@@ -61,19 +66,15 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        const res = await verifyTokenRequest(token);
-        if (!res.data) {
-          setIsAuthenticated(false);
-          setLoading(false);
-          return;
-        }
-        
-        setUser(res.data);
+        await verifyTokenRequest(token);
+        const storedUser = localStorage.getItem('washly_user');
+        if (storedUser) setUser(JSON.parse(storedUser));
         setIsAuthenticated(true);
-        setIsExpired(checkExpiration(res.data)); // Calcular al verificar token
-        setLoading(false);
       } catch (error) {
         setIsAuthenticated(false);
+        Cookies.remove("token");
+        localStorage.removeItem("washly_user");
+      } finally {
         setLoading(false);
       }
     }
@@ -82,12 +83,12 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ 
-      signin, 
+      login, 
       logout, 
       user, 
       isAuthenticated, 
-      isExpired, 
-      loading 
+      loading,
+      errors 
     }}>
       {children}
     </AuthContext.Provider>

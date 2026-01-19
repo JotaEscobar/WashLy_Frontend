@@ -6,40 +6,42 @@ import { Lock, User } from 'lucide-react';
 const Login = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const { login } = useAuth();
+    const [localError, setLocalError] = useState('');
+    
+    // Extraemos login y errors del contexto
+    const { login, errors: authErrors } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
+        setLocalError('');
         
-        const result = await login(username, password);
+        // CAMBIO CRÍTICO: Pasamos un objeto, no argumentos sueltos.
+        const result = await login({ username, password });
         
         if (result.success) {
-            // Redirección basada en Rol
-            if (result.role === 'admin') navigate('/dashboard');
-            else navigate('/pos');
+            // Redirección inteligente basada en Rol
+            if (result.role === 'ADMIN') navigate('/dashboard');
+            else navigate('/pos'); // Cajeros y Operarios al POS/Tickets
         } else {
-            setError(result.error);
+            // El error ya se maneja en AuthContext, pero podemos mostrarlo localmente si queremos
+            setLocalError(result.error);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-surface-50">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
                 <div className="text-center mb-8">
-                    <div className="w-12 h-12 bg-primary-500 rounded-xl mx-auto flex items-center justify-center text-white text-2xl font-bold mb-4">
-                        W
-                    </div>
                     <h2 className="text-2xl font-bold text-gray-800">Bienvenido a WashLy</h2>
-                    <p className="text-gray-500 text-sm mt-1">Ingresa tus credenciales para acceder</p>
+                    <p className="text-gray-500 text-sm mt-1">Ingresa tus credenciales</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {error && (
-                        <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
-                            {error}
+                    {/* Errores combinados (locales o de contexto) */}
+                    {(localError || (authErrors && authErrors[0])) && (
+                        <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-center">
+                            {localError || authErrors[0]}
                         </div>
                     )}
 
@@ -51,7 +53,7 @@ const Login = () => {
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
+                                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 placeholder="ej. admin"
                             />
                         </div>
@@ -65,7 +67,7 @@ const Login = () => {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
+                                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 placeholder="••••••••"
                             />
                         </div>
@@ -73,7 +75,7 @@ const Login = () => {
 
                     <button
                         type="submit"
-                        className="w-full bg-primary-900 hover:bg-primary-800 text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-primary-900/20 active:scale-95"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-all shadow-lg active:scale-95"
                     >
                         Iniciar Sesión
                     </button>

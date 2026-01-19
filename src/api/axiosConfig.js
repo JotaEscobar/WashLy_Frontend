@@ -1,35 +1,42 @@
 import axios from 'axios';
+import Cookies from 'js-cookie';
 
-const api = axios.create({
-    baseURL: 'http://127.0.0.1:8000/api/',
+const instance = axios.create({
+    // La URL base apunta al servidor Django (puerto 8000)
+    baseURL: 'http://127.0.0.1:8000', 
+    timeout: 5000,
     headers: {
         'Content-Type': 'application/json',
-    },
+        'Accept': 'application/json'
+    }
 });
 
-// Interceptor: Inyectar token en cada petición si existe
-api.interceptors.request.use(
+// Interceptor: Inyectar token JWT
+instance.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
+        const token = Cookies.get('token');
         if (token) {
-            config.headers['Authorization'] = `Token ${token}`;
+            // JWT requiere el prefijo 'Bearer'
+            config.headers['Authorization'] = `Bearer ${token}`;
         }
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// Interceptor: Manejar errores globales (ej. token expirado)
-api.interceptors.response.use(
+instance.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response && error.response.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user_role');
-            window.location.href = '/login';
+            // Si el token expira, limpiamos y redirigimos
+            Cookies.remove('token');
+            localStorage.removeItem('washly_user');
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }
 );
 
-export default api;
+export default instance;
