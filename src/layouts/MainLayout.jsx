@@ -1,7 +1,8 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Menu, Moon, Sun, Home, Package, Users, Settings, LogOut, X, LayoutDashboard, CreditCard, Box } from 'lucide-react';
+import { Menu, Moon, Sun, Home, Package, Users, Settings, LogOut, X, LayoutDashboard, CreditCard, Box, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useSedeStore } from '../stores/sedeStore';
 
 // Roles
 const ROLES = { ADMIN: 'ADMIN', CAJERO: 'CAJERO', OPERARIO: 'OPERARIO' };
@@ -12,12 +13,19 @@ const MainLayout = () => {
     const [isDarkMode, setIsDarkMode] = useState(() => {
         return localStorage.getItem('theme') === 'dark';
     });
-    
+
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
-    
+
     const userRole = user?.rol || 'OPERARIO';
+
+    const { cargarSedes } = useSedeStore();
+
+    // Cargar sedes al montar el layout
+    useEffect(() => {
+        cargarSedes();
+    }, []);
 
     // Efecto para aplicar el tema
     useEffect(() => {
@@ -41,47 +49,47 @@ const MainLayout = () => {
 
     // Matriz de Menú (Usando TUS iconos exactos)
     const menuItems = [
-        { 
-            path: '/dashboard', 
-            icon: <LayoutDashboard size={20} />, 
-            label: 'Dashboard', 
-            roles: [ROLES.ADMIN] 
+        {
+            path: '/dashboard',
+            icon: <LayoutDashboard size={20} />,
+            label: 'Dashboard',
+            roles: [ROLES.ADMIN]
         },
-        { 
-            path: '/pos', 
+        {
+            path: '/pos',
             icon: <Home size={20} />, // Tu icono original era Home
-            label: 'Punto de Venta', 
-            roles: [ROLES.ADMIN, ROLES.CAJERO] 
+            label: 'Punto de Venta',
+            roles: [ROLES.ADMIN, ROLES.CAJERO]
         },
-        { 
-            path: '/tickets', 
+        {
+            path: '/tickets',
             icon: <Box size={20} />, // Tu icono original era Box
-            label: 'Tickets', 
-            roles: [ROLES.ADMIN, ROLES.CAJERO, ROLES.OPERARIO] 
+            label: 'Tickets',
+            roles: [ROLES.ADMIN, ROLES.CAJERO, ROLES.OPERARIO]
         },
-        { 
-            path: '/clientes', 
-            icon: <Users size={20} />, 
-            label: 'Clientes', 
-            roles: [ROLES.ADMIN, ROLES.CAJERO] 
+        {
+            path: '/pagos',
+            icon: <CreditCard size={20} />,
+            label: 'Pagos',
+            roles: [ROLES.ADMIN, ROLES.CAJERO]
         },
-        { 
-            path: '/inventario', 
-            icon: <Package size={20} />, 
-            label: 'Inventario', 
-            roles: [ROLES.ADMIN] 
+        {
+            path: '/clientes',
+            icon: <Users size={20} />,
+            label: 'Clientes',
+            roles: [ROLES.ADMIN, ROLES.CAJERO]
         },
-        { 
-            path: '/pagos', 
-            icon: <CreditCard size={20} />, 
-            label: 'Pagos', 
-            roles: [ROLES.ADMIN, ROLES.CAJERO] 
+        {
+            path: '/inventario',
+            icon: <Package size={20} />,
+            label: 'Inventario',
+            roles: [ROLES.ADMIN]
         },
-        { 
-            path: '/config', 
-            icon: <Settings size={20} />, 
-            label: 'Configuración', 
-            roles: [ROLES.ADMIN] 
+        {
+            path: '/config',
+            icon: <Settings size={20} />,
+            label: 'Configuración',
+            roles: [ROLES.ADMIN]
         },
     ];
 
@@ -90,10 +98,10 @@ const MainLayout = () => {
 
     return (
         <div className={`flex h-screen bg-gray-100 ${isDarkMode ? 'dark bg-gray-900 text-white' : ''}`}>
-            
+
             {/* SIDEBAR */}
             <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 flex flex-col relative z-20 shadow-xl`}>
-                
+
                 {/* Header Sidebar */}
                 <div className="h-20 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-700">
                     <div className={`flex items-center gap-3 transition-opacity duration-300 ${!isSidebarOpen && 'opacity-0 w-0 overflow-hidden'}`}>
@@ -102,7 +110,7 @@ const MainLayout = () => {
                         </div>
                         <span className="font-bold text-xl tracking-tight text-gray-800 dark:text-white">WashLy</span>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setSidebarOpen(!isSidebarOpen)}
                         className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
                     >
@@ -113,10 +121,10 @@ const MainLayout = () => {
                 {/* Navigation */}
                 <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar">
                     {allowedMenuItems.map((item) => (
-                        <NavItem 
+                        <NavItem
                             key={item.path}
-                            icon={item.icon} 
-                            label={item.label} 
+                            icon={item.icon}
+                            label={item.label}
                             isOpen={isSidebarOpen}
                             active={location.pathname === item.path}
                             onClick={() => navigate(item.path)}
@@ -126,19 +134,30 @@ const MainLayout = () => {
 
                 {/* Footer Sidebar */}
                 <div className="p-4 border-t border-gray-100 dark:border-gray-700 space-y-2">
-                    <button 
+                    {/* Botón Panel Proveedor - Solo Super Administrador */}
+                    {user?.is_superuser && (
+                        <button
+                            onClick={() => navigate('/provider/dashboard')}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-100 dark:border-indigo-800 transition-colors ${!isSidebarOpen && 'justify-center'}`}
+                        >
+                            <ShieldCheck size={20} />
+                            {isSidebarOpen && <span className="font-semibold text-sm">Panel Proveedor</span>}
+                        </button>
+                    )}
+
+                    <button
                         onClick={toggleTheme}
                         className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors ${!isSidebarOpen && 'justify-center'}`}
                     >
                         {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
                         {isSidebarOpen && <span className="font-medium text-sm">Tema {isDarkMode ? 'Claro' : 'Oscuro'}</span>}
                     </button>
-                    
-                    <button 
+
+                    <button
                         onClick={handleLogout}
                         className={`w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors ${!isSidebarOpen && 'justify-center'}`}
                     >
-                        <LogOut size={20}/>
+                        <LogOut size={20} />
                         {isSidebarOpen && <span className="font-medium text-sm">Salir</span>}
                     </button>
                 </div>
@@ -157,8 +176,8 @@ const MainLayout = () => {
 // Componente NavItem (Tu código original exacto)
 const NavItem = ({ icon, label, isOpen, active, onClick }) => (
     <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all whitespace-nowrap overflow-hidden
-        ${active 
-            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' 
+        ${active
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
             : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'}
         ${!isOpen && 'justify-center px-0'}
     `}>

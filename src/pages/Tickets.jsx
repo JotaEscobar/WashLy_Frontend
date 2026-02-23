@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle, Lock, Ban, Truck, MessageSquare } from 'lucide-react';
 import api from '../api/axiosConfig';
+import { useSedeStore } from '../stores/sedeStore';
 import { useNavigate } from 'react-router-dom';
+import PaymentMethodSelect from '../components/PaymentMethodSelect';
+import { printTicket } from '../utils/ticketPrinter';
+import { useAuth } from '../context/AuthContext';
 
 const Tickets = () => {
+    const { currentSede } = useSedeStore();
+    const { user } = useAuth();
     // --- ESTADOS ---
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
-    
+
     // Paginación
     const [nextPage, setNextPage] = useState(null);
     const [prevPage, setPrevPage] = useState(null);
-    
+
     // Filtros
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
@@ -23,25 +29,25 @@ const Tickets = () => {
     const [modalLoading, setModalLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
-    
+
     // Acciones Modal
     const [newStatus, setNewStatus] = useState('');
     const [statusComment, setStatusComment] = useState('');
     const [cancelReason, setCancelReason] = useState('');
     const [showCancelOptions, setShowCancelOptions] = useState(false);
-    
+
     // Pago Rápido
     const [showPayModal, setShowPayModal] = useState(false);
     const [payAmount, setPayAmount] = useState('');
-    const [payMethod, setPayMethod] = useState('EFECTIVO');
+    const [payMethod, setPayMethod] = useState('');
 
     // Sistema de Modales (Confirmación y Alertas)
-    const [modalConfig, setModalConfig] = useState({ 
-        show: false, 
-        title: '', 
-        message: '', 
+    const [modalConfig, setModalConfig] = useState({
+        show: false,
+        title: '',
+        message: '',
         action: null,
-        type: 'info', 
+        type: 'info',
         confirmText: 'Confirmar'
     });
 
@@ -76,7 +82,7 @@ const Tickets = () => {
 
     // --- CARGA DE DATOS ---
     const fetchTickets = async (url = null) => {
-        if(!url && !tickets.length) setLoading(true); 
+        if (!url && !tickets.length) setLoading(true);
         try {
             let endpoint = url;
             if (!endpoint) {
@@ -93,8 +99,8 @@ const Tickets = () => {
             const results = Array.isArray(data) ? data : data.results;
             setNextPage(data.next);
             setPrevPage(data.previous);
-            
-            const sorted = results.sort((a, b) => 
+
+            const sorted = results.sort((a, b) =>
                 new Date(b.creado_en) - new Date(a.creado_en)
             );
             setTickets(sorted);
@@ -105,7 +111,9 @@ const Tickets = () => {
         }
     };
 
-    useEffect(() => { fetchTickets(); }, [statusFilter, dateFrom, dateTo]);
+    useEffect(() => {
+        if (currentSede) fetchTickets();
+    }, [statusFilter, dateFrom, dateTo, currentSede?.id]);
 
     // --- HELPERS VISUALES ---
     const getStatusBadge = (status) => {
@@ -127,17 +135,17 @@ const Tickets = () => {
         const isSameDay = now.toDateString() === promised.toDateString();
 
         if (promised < now && !isSameDay) {
-            return { 
-                className: 'border-l-4 border-red-500 bg-red-50/50 dark:bg-transparent dark:border-red-500', 
-                text: 'VENCIDO PLAZO', 
-                textColor: 'text-red-600 dark:text-red-400 font-bold' 
+            return {
+                className: 'border-l-4 border-red-500 bg-red-50/50 dark:bg-transparent dark:border-red-500',
+                text: 'VENCIDO PLAZO',
+                textColor: 'text-red-600 dark:text-red-400 font-bold'
             };
         }
         if (isSameDay) {
-            return { 
-                className: 'border-l-4 border-orange-500 bg-orange-50/50 dark:bg-transparent dark:border-orange-500', 
-                text: 'ENTREGA HOY', 
-                textColor: 'text-orange-600 dark:text-orange-400 font-bold' 
+            return {
+                className: 'border-l-4 border-orange-500 bg-orange-50/50 dark:bg-transparent dark:border-orange-500',
+                text: 'ENTREGA HOY',
+                textColor: 'text-orange-600 dark:text-orange-400 font-bold'
             };
         }
         return null;
@@ -151,7 +159,7 @@ const Tickets = () => {
         const updated = new Date(dateStr);
         const now = new Date();
         const diffDays = Math.floor((now - updated) / (1000 * 60 * 60 * 24));
-        
+
         return diffDays <= 0 ? "Desde hoy" : `Hace ${diffDays} días`;
     };
 
@@ -185,10 +193,10 @@ const Tickets = () => {
             });
             setSuccessMsg('Estado actualizado');
             setTimeout(() => {
-                setSuccessMsg(''); 
-                handleViewDetails(selectedTicket.id); 
-                fetchTickets(); 
-            }, 1000); 
+                setSuccessMsg('');
+                handleViewDetails(selectedTicket.id);
+                fetchTickets();
+            }, 1000);
         } catch (error) {
             const msg = error.response?.data?.non_field_errors?.[0] || error.response?.data?.error || "Error al actualizar estado";
             showAlert('Error al Actualizar', msg);
@@ -213,7 +221,7 @@ const Tickets = () => {
             await api.post('pagos/', {
                 ticket: selectedTicket.id,
                 monto: parseFloat(payAmount),
-                metodo_pago: payMethod,
+                metodo_pago_config: payMethod,
                 estado: 'PAGADO',
                 origen: 'TICKETS'
             });
@@ -224,20 +232,20 @@ const Tickets = () => {
             setSuccessMsg('Pago registrado correctamente');
 
             setTimeout(() => {
-                setSuccessMsg(''); 
+                setSuccessMsg('');
                 handleViewDetails(selectedTicket.id);
                 fetchTickets();
             }, 1500);
 
         } catch (error) {
             const serverError = error.response?.data?.error || error.response?.data?.detail || "No se pudo procesar el pago.";
-            setModalConfig({ 
-                show: true, 
-                title: 'No se pudo pagar', 
+            setModalConfig({
+                show: true,
+                title: 'No se pudo pagar',
                 message: serverError,
-                type: 'error', 
+                type: 'error',
                 confirmText: 'Entendido',
-                action: null 
+                action: null
             });
         } finally {
             setActionLoading(false);
@@ -257,8 +265,8 @@ const Tickets = () => {
             setSuccessMsg('Ticket cancelado');
             setTimeout(() => {
                 setSuccessMsg('');
-                setSelectedTicket(null); 
-                fetchTickets(); 
+                setSelectedTicket(null);
+                fetchTickets();
             }, 1000);
         } catch (error) {
             showAlert('Error', error.response?.data?.error || "Error al cancelar.");
@@ -274,71 +282,10 @@ const Tickets = () => {
 
     const handleReprintTicket = () => {
         if (!selectedTicket) return;
-        const ticketWindow = window.open('', '_blank', 'width=400,height=600');
-        const qrUrl = selectedTicket.qr_code_url || selectedTicket.qr_code;
-        const html = `
-            <html>
-            <head>
-                <title>Reimpresión Ticket #${selectedTicket.numero_ticket}</title>
-                <style>
-                    body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px; width: 80mm; text-align: center; }
-                    .header { margin-bottom: 15px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
-                    .info { text-align: left; margin-bottom: 10px; font-size: 11px; line-height: 1.4; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 11px; }
-                    th { text-align: left; border-bottom: 1px solid #000; font-weight: bold; }
-                    td { padding: 4px 0; vertical-align: top; text-align: left;}
-                    .text-right { text-align: right; }
-                    .totals { margin-top: 15px; border-top: 1px dashed #000; padding-top: 5px; }
-                    .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; margin-top: 5px;}
-                    .sub-row { display: flex; justify-content: space-between; font-size: 12px; }
-                    .qr-container { margin-top: 20px; display: flex; flex-direction: column; align-items: center; }
-                    img { width: 120px; height: 120px; }
-                    .watermark { font-size: 14px; font-weight: bold; border: 2px solid #000; padding: 5px; margin-top: 10px; display: inline-block;}
-                    .qr-text { font-size: 10px; margin-top: 5px; font-weight: bold; }
-                    .qr-subtext { font-size: 10px; margin-top: 2px; }
-                    .footer-system { margin-top: 20px; font-size: 9px; color: #666; border-top: 1px solid #ddd; padding-top: 5px; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <strong>LAVANDERÍA SUPER CLEAN</strong><br>
-                    RUC: 20601234567<br>
-                    Av. Principal 123
-                </div>
-                <div class="info">
-                    <strong>TICKET: ${selectedTicket.numero_ticket}</strong><br>
-                    Cliente: <strong>${selectedTicket.cliente_info?.nombre_completo}</strong>
-                </div>
-                <table>
-                    <thead><tr><th>Cant</th><th>Desc</th><th class="text-right">Total</th></tr></thead>
-                    <tbody>
-                        ${selectedTicket.items.map(item => `
-                            <tr><td>${item.cantidad}</td><td>${item.servicio_nombre}</td><td class="text-right">${parseFloat(item.subtotal).toFixed(2)}</td></tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                <div class="totals">
-                    <div class="total-row"><span>TOTAL:</span><span>S/ ${selectedTicket.total.toFixed(2)}</span></div>
-                    <div class="sub-row"><span>Pagado:</span><span>S/ ${(selectedTicket.total - selectedTicket.saldo_pendiente).toFixed(2)}</span></div>
-                    <div class="sub-row"><span>Saldo:</span><span>S/ ${selectedTicket.saldo_pendiente.toFixed(2)}</span></div>
-                </div>
-                ${selectedTicket.saldo_pendiente <= 0 ? '<div class="watermark">¡PAGADO!</div>' : ''}
-                <div class="qr-container">
-                    ${qrUrl ? `<img src="${qrUrl}" />` : ''}
-                    <div class="qr-text">Escanear para ver estado</div>
-                    <div class="qr-subtext">¡Gracias por su preferencia!</div>
-                    <div class="qr-subtext">Conserve este ticket para el recojo.</div>
-                </div>
-                <div class="footer-system">Sistema Washly v1.0</div>
-            </body>
-            </html>
-        `;
-        ticketWindow.document.write(html);
-        ticketWindow.document.close();
-        setTimeout(() => { ticketWindow.focus(); ticketWindow.print(); }, 800);
+        printTicket(selectedTicket, user?.empresa);
     };
 
-    const filteredTickets = tickets.filter(t => 
+    const filteredTickets = tickets.filter(t =>
         t.numero_ticket.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.cliente_nombre.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -360,12 +307,12 @@ const Tickets = () => {
             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-6 flex flex-col md:flex-row gap-4 items-center">
                 <div className="relative flex-1 w-full">
                     <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
-                    <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"/>
+                    <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" />
                 </div>
                 <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-transparent text-sm outline-none dark:text-gray-300 p-1"/>
-                    <ArrowRight size={14} className="text-gray-400"/>
-                    <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="bg-transparent text-sm outline-none dark:text-gray-300 p-1"/>
+                    <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-transparent text-sm outline-none dark:text-gray-300 p-1" />
+                    <ArrowRight size={14} className="text-gray-400" />
+                    <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="bg-transparent text-sm outline-none dark:text-gray-300 p-1" />
                 </div>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium dark:text-white">
                     <option value="">Todos los Estados</option>
@@ -393,42 +340,42 @@ const Tickets = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {loading ? <tr><td colSpan="7" className="p-8 text-center animate-pulse">Cargando...</td></tr> : 
-                             filteredTickets.length === 0 ? <tr><td colSpan="7" className="p-8 text-center text-gray-500">Sin resultados</td></tr> :
-                             filteredTickets.map(ticket => {
-                                const statusData = getDateStatus(ticket);
-                                const readyMsg = getReadyTime(ticket);
-                                return (
-                                    <tr key={ticket.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${statusData?.className || ''}`}>
-                                        <td className="p-4 font-bold text-gray-900 dark:text-white">
-                                            {ticket.numero_ticket}
-                                            {statusData && <div className={`flex items-center gap-1 mt-1 text-[10px] font-black ${statusData.textColor}`}><AlertTriangle size={10}/> {statusData.text}</div>}
-                                        </td>
-                                        <td className="p-4 text-xs text-gray-500">{new Date(ticket.creado_en).toLocaleDateString()}</td>
-                                        <td className="p-4 font-medium dark:text-gray-200">{ticket.cliente_nombre}</td>
-                                        <td className="p-4">
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-black border uppercase ${getStatusBadge(ticket.estado)}`}>{ticket.estado}</span>
-                                            {readyMsg && <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle size={10}/> {readyMsg}</div>}
-                                        </td>
-                                        <td className="p-4 text-sm text-gray-600 dark:text-gray-300">{new Date(ticket.fecha_prometida).toLocaleString([], {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'})}</td>
-                                        <td className="p-4 text-right">
-                                            {ticket.saldo_pendiente > 0 
-                                            ? <span className="text-xs font-bold text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">Debe: S/ {ticket.saldo_pendiente.toFixed(2)}</span>
-                                            : <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded">Pagado</span>}
-                                        </td>
-                                        <td className="p-4 text-center">
-                                            <button onClick={() => handleViewDetails(ticket.id)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg dark:text-blue-400 dark:hover:bg-blue-900/30"><Eye size={18}/></button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                            {loading ? <tr><td colSpan="7" className="p-8 text-center animate-pulse">Cargando...</td></tr> :
+                                filteredTickets.length === 0 ? <tr><td colSpan="7" className="p-8 text-center text-gray-500">Sin resultados</td></tr> :
+                                    filteredTickets.map(ticket => {
+                                        const statusData = getDateStatus(ticket);
+                                        const readyMsg = getReadyTime(ticket);
+                                        return (
+                                            <tr key={ticket.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${statusData?.className || ''}`}>
+                                                <td className="p-4 font-bold text-gray-900 dark:text-white">
+                                                    {ticket.numero_ticket}
+                                                    {statusData && <div className={`flex items-center gap-1 mt-1 text-[10px] font-black ${statusData.textColor}`}><AlertTriangle size={10} /> {statusData.text}</div>}
+                                                </td>
+                                                <td className="p-4 text-xs text-gray-500">{new Date(ticket.creado_en).toLocaleDateString()}</td>
+                                                <td className="p-4 font-medium dark:text-gray-200">{ticket.cliente_nombre}</td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black border uppercase ${getStatusBadge(ticket.estado)}`}>{ticket.estado}</span>
+                                                    {readyMsg && <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle size={10} /> {readyMsg}</div>}
+                                                </td>
+                                                <td className="p-4 text-sm text-gray-600 dark:text-gray-300">{new Date(ticket.fecha_prometida).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                                                <td className="p-4 text-right">
+                                                    {ticket.saldo_pendiente > 0
+                                                        ? <span className="text-xs font-bold text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">Debe: S/ {ticket.saldo_pendiente.toFixed(2)}</span>
+                                                        : <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded">Pagado</span>}
+                                                </td>
+                                                <td className="p-4 text-center">
+                                                    <button onClick={() => handleViewDetails(ticket.id)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg dark:text-blue-400 dark:hover:bg-blue-900/30"><Eye size={18} /></button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                         </tbody>
                     </table>
                 </div>
                 <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
-                    <button disabled={!prevPage} onClick={() => fetchTickets(prevPage)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!prevPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}><ChevronLeft size={16}/> Anterior</button>
+                    <button disabled={!prevPage} onClick={() => fetchTickets(prevPage)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!prevPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}><ChevronLeft size={16} /> Anterior</button>
                     <span className="text-xs text-gray-500">Navegación de Registros</span>
-                    <button disabled={!nextPage} onClick={() => fetchTickets(nextPage)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!nextPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}>Siguiente <ChevronRight size={16}/></button>
+                    <button disabled={!nextPage} onClick={() => fetchTickets(nextPage)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${!nextPage ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30'}`}>Siguiente <ChevronRight size={16} /></button>
                 </div>
             </div>
 
@@ -436,17 +383,16 @@ const Tickets = () => {
             {selectedTicket && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm fixed top-0 left-0 w-full h-full">
                     <div className="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700 relative">
-                        
+
                         {/* ALERTAS Y CONFIRMACIONES */}
                         {modalConfig.show && (
                             <div className="absolute inset-0 z-[60] flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl animate-in fade-in p-4">
                                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-sm w-full text-center">
-                                    <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
-                                        modalConfig.type === 'money' ? 'bg-emerald-100 text-emerald-600' : 
+                                    <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${modalConfig.type === 'money' ? 'bg-emerald-100 text-emerald-600' :
                                         ['danger', 'error'].includes(modalConfig.type) ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
-                                    }`}>
-                                        {modalConfig.type === 'money' ? <DollarSign size={24}/> : 
-                                         ['danger', 'error'].includes(modalConfig.type) ? <AlertCircle size={24}/> : <AlertTriangle size={24}/>}
+                                        }`}>
+                                        {modalConfig.type === 'money' ? <DollarSign size={24} /> :
+                                            ['danger', 'error'].includes(modalConfig.type) ? <AlertCircle size={24} /> : <AlertTriangle size={24} />}
                                     </div>
                                     <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{modalConfig.title}</h3>
                                     <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{modalConfig.message}</p>
@@ -454,10 +400,9 @@ const Tickets = () => {
                                         {modalConfig.action && (
                                             <button onClick={closeModal} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-sm transition-colors">Cancelar</button>
                                         )}
-                                        <button onClick={modalConfig.action || closeModal} className={`flex-1 px-4 py-2 text-white rounded-xl font-bold text-sm shadow-lg transition-transform active:scale-95 ${
-                                            modalConfig.type === 'money' ? 'bg-emerald-600 hover:bg-emerald-700' : 
+                                        <button onClick={modalConfig.action || closeModal} className={`flex-1 px-4 py-2 text-white rounded-xl font-bold text-sm shadow-lg transition-transform active:scale-95 ${modalConfig.type === 'money' ? 'bg-emerald-600 hover:bg-emerald-700' :
                                             ['danger', 'error'].includes(modalConfig.type) ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-                                        }`}>
+                                            }`}>
                                             {modalConfig.confirmText}
                                         </button>
                                     </div>
@@ -468,7 +413,7 @@ const Tickets = () => {
                         {/* MENSAJE FLOTANTE DE ÉXITO (Toast) */}
                         {successMsg && (
                             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[70] bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in fade-in zoom-in slide-in-from-bottom-4">
-                                <div className="bg-green-500 rounded-full p-1"><CheckCircle size={14} className="text-white"/></div>
+                                <div className="bg-green-500 rounded-full p-1"><CheckCircle size={14} className="text-white" /></div>
                                 <span className="font-bold text-sm">{successMsg}</span>
                             </div>
                         )}
@@ -481,25 +426,25 @@ const Tickets = () => {
                                     <span className={`text-xs px-2 py-1 rounded-full border ${getStatusBadge(selectedTicket.estado)}`}>{selectedTicket.estado}</span>
                                 </h2>
                                 <div className="text-base text-gray-700 dark:text-gray-300 font-bold mt-1 flex items-center gap-2">
-                                    <User size={16} className="text-gray-400"/>
+                                    <User size={16} className="text-gray-400" />
                                     {selectedTicket.cliente_info?.nombre_completo}
                                 </div>
                                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                     <span className="flex items-center gap-1"><Clock size={14}/> Entrega: {new Date(selectedTicket.fecha_prometida).toLocaleString()}</span>
+                                    <span className="flex items-center gap-1"><Clock size={14} /> Entrega: {new Date(selectedTicket.fecha_prometida).toLocaleString()}</span>
                                 </div>
                             </div>
-                            <button onClick={() => setSelectedTicket(null)} className="text-gray-400 hover:text-red-500"><X size={24}/></button>
+                            <button onClick={() => setSelectedTicket(null)} className="text-gray-400 hover:text-red-500"><X size={24} /></button>
                         </div>
 
                         <div className="p-6 overflow-y-auto flex-1 space-y-4">
-                            
+
                             {/* Row 1: Gestión de Estado y Finanzas */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                
+
                                 {/* Gestión de Estado */}
                                 <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50 relative">
                                     <h3 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-3 flex items-center gap-2">Gestión de Estado</h3>
-                                    
+
                                     {selectedTicket.estado !== 'CANCELADO' && selectedTicket.estado !== 'ENTREGADO' && (
                                         <button onClick={() => setShowCancelOptions(!showCancelOptions)} className="absolute -top-2 right-0 flex items-center justify-center bg-white dark:bg-gray-800 text-red-500 border border-red-100 dark:border-red-900/30 rounded-full p-2 hover:pr-4 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-300 group shadow-sm z-10">
                                             <Trash2 size={16} />
@@ -526,12 +471,12 @@ const Tickets = () => {
                                                         {actionLoading ? '...' : 'Guardar'}
                                                     </button>
                                                 </div>
-                                                <input type="text" placeholder="Comentario..." value={statusComment} onChange={(e) => setStatusComment(e.target.value)} className="w-full p-2 text-xs border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"/>
+                                                <input type="text" placeholder="Comentario..." value={statusComment} onChange={(e) => setStatusComment(e.target.value)} className="w-full p-2 text-xs border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                                             </>
                                         ) : (
                                             <div className="mt-2 animate-in fade-in">
                                                 <p className="text-xs font-bold text-red-600 mb-1">Motivo de cancelación:</p>
-                                                <input type="text" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className="w-full p-2 text-xs border border-red-300 rounded mb-2 dark:bg-gray-700 dark:text-white" autoFocus/>
+                                                <input type="text" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className="w-full p-2 text-xs border border-red-300 rounded mb-2 dark:bg-gray-700 dark:text-white" autoFocus />
                                                 <div className="flex gap-2">
                                                     <button onClick={onConfirmCancelClick} disabled={actionLoading} className="flex-1 bg-red-600 text-white text-xs py-1.5 rounded font-bold hover:bg-red-700">Confirmar</button>
                                                     <button onClick={() => setShowCancelOptions(false)} className="px-2 text-gray-500 text-xs hover:underline">Atrás</button>
@@ -543,7 +488,7 @@ const Tickets = () => {
 
                                 {/* Finanzas */}
                                 <div className="bg-gray-50 dark:bg-gray-700/20 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                                    <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-3 flex items-center gap-2"><Wallet size={14}/> Finanzas</h3>
+                                    <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-3 flex items-center gap-2"><Wallet size={14} /> Finanzas</h3>
                                     <div className="flex justify-between items-end">
                                         <div>
                                             <p className="text-xs text-gray-500">Total: <strong className="text-gray-900 dark:text-white">S/ {selectedTicket.total.toFixed(2)}</strong></p>
@@ -555,24 +500,23 @@ const Tickets = () => {
                                         </div>
                                     </div>
                                     {selectedTicket.saldo_pendiente > 0 && !showPayModal && selectedTicket.estado !== 'CANCELADO' && (
-                                        <button onClick={() => {setShowPayModal(true); setPayAmount(selectedTicket.saldo_pendiente);}} className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded-lg text-xs font-bold flex justify-center gap-2 items-center shadow-sm">
-                                            <DollarSign size={14}/> Registrar Pago
+                                        <button onClick={() => { setShowPayModal(true); setPayAmount(selectedTicket.saldo_pendiente); }} className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded-lg text-xs font-bold flex justify-center gap-2 items-center shadow-sm">
+                                            <DollarSign size={14} /> Registrar Pago
                                         </button>
                                     )}
                                     {showPayModal && (
                                         <div className="mt-2 flex gap-1 animate-in fade-in flex-col">
                                             <div className="flex gap-1">
-                                                <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} className="w-20 p-2 text-xs border rounded dark:bg-gray-700 dark:text-white" placeholder="Monto"/>
-                                                <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)} className="flex-1 p-2 text-xs border rounded dark:bg-gray-700 dark:text-white">
-                                                    <option value="EFECTIVO">Efectivo</option>
-                                                    <option value="YAPE">Yape</option>
-                                                    <option value="PLIN">Plin</option>
-                                                    <option value="TARJETA">Tarjeta</option>
-                                                </select>
+                                                <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} className="w-20 p-2 text-xs border rounded dark:bg-gray-700 dark:text-white" placeholder="Monto" />
+                                                <PaymentMethodSelect
+                                                    value={payMethod}
+                                                    onChange={(e) => setPayMethod(e.target.value)}
+                                                    className="flex-1 p-2 text-xs border rounded dark:bg-gray-700 dark:text-white"
+                                                />
                                             </div>
                                             <div className="flex gap-2 mt-1">
                                                 <button onClick={onRegisterPaymentClick} disabled={actionLoading} className="flex-1 bg-emerald-600 text-white text-xs rounded py-1 font-bold hover:bg-emerald-700">Pagar</button>
-                                                <button onClick={() => setShowPayModal(false)} className="px-2 text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 rounded"><X size={14}/></button>
+                                                <button onClick={() => setShowPayModal(false)} className="px-2 text-gray-400 hover:text-red-500 border border-gray-200 dark:border-gray-600 rounded"><X size={14} /></button>
                                             </div>
                                         </div>
                                     )}
@@ -581,7 +525,7 @@ const Tickets = () => {
 
                             {/* Row 2: Tabla de Prendas y Detalles de Entrega (SIMETRICO 50/50) */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                
+
                                 {/* Lado Izquierdo: Tabla de Items */}
                                 <div className="border rounded-xl overflow-hidden dark:border-gray-700 h-full">
                                     <div className="bg-gray-100 dark:bg-gray-700/50 p-2 text-xs font-bold text-gray-500 uppercase border-b dark:border-gray-700">
@@ -616,18 +560,18 @@ const Tickets = () => {
                                     <div className="bg-gray-100 dark:bg-gray-700/50 p-2 text-xs font-bold text-gray-500 uppercase border-b dark:border-gray-700">
                                         Información de Entrega
                                     </div>
-                                    
+
                                     <div className="p-4 flex flex-col gap-4 flex-1 bg-white dark:bg-gray-800">
-                                        
+
                                         {/* Tipo de Entrega */}
                                         <div>
                                             <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Tipo de Entrega</span>
                                             <div className="font-bold text-gray-800 dark:text-gray-200 text-sm flex items-center gap-2">
-                                                <Truck size={16} className="text-blue-500"/>
+                                                <Truck size={16} className="text-blue-500" />
                                                 {selectedTicket.tipo_entrega || 'Recojo en Local'}
                                             </div>
                                         </div>
-                                        
+
                                         {/* Observaciones (Simplificado y Limpio) */}
                                         <div className="flex-1">
                                             <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Observaciones</span>
@@ -642,7 +586,7 @@ const Tickets = () => {
 
                             <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-center">
                                 <button onClick={handleReprintTicket} className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-6 py-2 rounded-xl transition-colors font-bold border border-gray-200 dark:border-gray-600">
-                                    <Printer size={18}/> Ver / Reimprimir Ticket
+                                    <Printer size={18} /> Ver / Reimprimir Ticket
                                 </button>
                             </div>
                         </div>

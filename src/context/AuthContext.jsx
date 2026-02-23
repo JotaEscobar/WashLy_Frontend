@@ -1,6 +1,7 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { loginRequest, verifyTokenRequest } from '../api/auth';
 import Cookies from 'js-cookie';
+import { startTokenRefresh, stopTokenRefresh } from '../api/tokenRefresh';  // ✅ Import
 
 const AuthContext = createContext();
 
@@ -20,9 +21,9 @@ export const AuthProvider = ({ children }) => {
   const checkExpiration = (userData) => {
     if (!userData?.empresa?.fecha_vencimiento) return false;
     const today = new Date();
-    today.setHours(0,0,0,0);
+    today.setHours(0, 0, 0, 0);
     const expiration = new Date(userData.empresa.fecha_vencimiento);
-    expiration.setHours(24,0,0,0); 
+    expiration.setHours(24, 0, 0, 0);
     return today > expiration;
   };
 
@@ -30,14 +31,17 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await loginRequest(credentials);
       const userData = res.data;
-      
+
       setUser(userData);
       setIsAuthenticated(true);
-      
+
       // Guardar token en Cookies para axios
       Cookies.set("token", userData.access, { expires: 1 });
       localStorage.setItem('washly_user', JSON.stringify(userData));
-      
+
+      // ✅ Iniciar auto-refresh de tokens
+      startTokenRefresh();
+
       return { success: true, role: userData.rol };
 
     } catch (error) {
@@ -49,6 +53,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    // ✅ Detener auto-refresh
+    stopTokenRefresh();
+
     Cookies.remove("token");
     localStorage.removeItem("washly_user");
     setUser(null);
@@ -82,13 +89,13 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ 
-      login, 
-      logout, 
-      user, 
-      isAuthenticated, 
+    <AuthContext.Provider value={{
+      login,
+      logout,
+      user,
+      isAuthenticated,
       loading,
-      errors 
+      errors
     }}>
       {children}
     </AuthContext.Provider>

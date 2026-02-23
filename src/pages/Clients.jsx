@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, UserPlus, MessageCircle, Crown, AlertCircle, Edit, History, User, Save, X, Calendar, MapPin } from 'lucide-react';
 import api from '../api/axiosConfig';
+import { useSedeStore } from '../stores/sedeStore';
 
 const Clients = () => {
+    const { currentSede } = useSedeStore();
     // --- ESTADOS ---
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    
+
     // Modal y Selección
     const [selectedClient, setSelectedClient] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -16,7 +18,7 @@ const Clients = () => {
 
     // Formulario
     const [formData, setFormData] = useState({
-        id: null, tipo_documento: 'DNI', numero_documento: '', 
+        id: null, tipo_documento: 'DNI', numero_documento: '',
         nombres: '', apellidos: '', telefono: '', email: '', direccion: '', notas: ''
     });
 
@@ -36,8 +38,8 @@ const Clients = () => {
     };
 
     useEffect(() => {
-        fetchClients();
-    }, []);
+        if (currentSede) fetchClients();
+    }, [currentSede?.id]);
 
     // Buscador con Debounce
     useEffect(() => {
@@ -72,7 +74,7 @@ const Clients = () => {
         } else {
             setSelectedClient(null);
             setFormData({
-                tipo_documento: 'DNI', numero_documento: '', nombres: '', apellidos: '', 
+                tipo_documento: 'DNI', numero_documento: '', nombres: '', apellidos: '',
                 telefono: '', email: '', direccion: '', notas: ''
             });
             setActiveTab('profile');
@@ -101,7 +103,7 @@ const Clients = () => {
     };
 
     const formatCurrency = (amount) => `S/ ${parseFloat(amount).toFixed(2)}`;
-    
+
     const formatDate = (dateString) => {
         if (!dateString) return 'Nunca';
         const date = new Date(dateString);
@@ -110,14 +112,14 @@ const Clients = () => {
 
     return (
         <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-4rem)] flex flex-col">
-            
+
             {/* HEADER */}
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-3xl font-black text-gray-800 dark:text-white">Clientes</h1>
                     <p className="text-gray-500 dark:text-gray-400">Gestión de relaciones y seguimiento</p>
                 </div>
-                <button 
+                <button
                     onClick={() => handleOpenModal()}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/30 transition-all"
                 >
@@ -127,10 +129,10 @@ const Clients = () => {
 
             {/* BUSCADOR */}
             <div className="mb-6 relative">
-                <Search className="absolute left-4 top-3.5 text-gray-400" size={20}/>
-                <input 
-                    type="text" 
-                    placeholder="Buscar por nombre, DNI o teléfono..." 
+                <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+                <input
+                    type="text"
+                    placeholder="Buscar por nombre, DNI o teléfono..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none shadow-sm transition-all"
@@ -176,9 +178,9 @@ const Clients = () => {
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm text-gray-600 dark:text-gray-300">{client.telefono}</span>
                                             {client.telefono && (
-                                                <a 
-                                                    href={`https://wa.me/51${client.telefono}`} 
-                                                    target="_blank" 
+                                                <a
+                                                    href={`https://wa.me/51${client.telefono}`}
+                                                    target="_blank"
                                                     rel="noreferrer"
                                                     className="text-green-500 hover:text-green-600 bg-green-100 dark:bg-green-900/30 p-1.5 rounded-lg transition-colors"
                                                     title="Abrir WhatsApp"
@@ -199,7 +201,7 @@ const Clients = () => {
                                     </td>
                                     <td className="p-4">
                                         <span className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-1">
-                                            <Calendar size={14} className="text-gray-400"/>
+                                            <Calendar size={14} className="text-gray-400" />
                                             {formatDate(client.ultima_visita)}
                                         </span>
                                     </td>
@@ -215,7 +217,7 @@ const Clients = () => {
                                     </td>
                                     <td className="p-4">
                                         <div className="flex justify-center">
-                                            <button 
+                                            <button
                                                 onClick={() => handleOpenModal(client)}
                                                 className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-all"
                                             >
@@ -234,13 +236,13 @@ const Clients = () => {
             {showModal && (
                 <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end">
                     <div className="w-[600px] h-full bg-white dark:bg-gray-800 shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
-                        
+
                         {/* Modal Header */}
                         <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-start">
                             <div>
                                 <h2 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
                                     {selectedClient ? selectedClient.nombre_completo : 'Nuevo Cliente'}
-                                    {selectedClient?.es_vip && <Crown className="text-yellow-500 fill-yellow-500" size={24}/>}
+                                    {selectedClient?.es_vip && <Crown className="text-yellow-500 fill-yellow-500" size={24} />}
                                 </h2>
                                 <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
                                     {selectedClient ? `ID: ${selectedClient.numero_documento}` : 'Complete la información'}
@@ -254,13 +256,13 @@ const Clients = () => {
                         {/* Tabs */}
                         {selectedClient && (
                             <div className="flex border-b border-gray-200 dark:border-gray-700 px-6">
-                                <button 
+                                <button
                                     onClick={() => setActiveTab('profile')}
                                     className={`px-4 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'profile' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                                 >
                                     <User size={18} /> Perfil
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => setActiveTab('history')}
                                     className={`px-4 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                                 >
@@ -271,17 +273,17 @@ const Clients = () => {
 
                         {/* Modal Body */}
                         <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 dark:bg-gray-900/50">
-                            
+
                             {/* TAB: PERFIL (FORMULARIO) */}
                             {(!selectedClient || activeTab === 'profile') && (
                                 <form onSubmit={handleSaveClient} className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="text-xs font-bold text-gray-500 uppercase">Tipo Doc</label>
-                                            <select 
+                                            <select
                                                 className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500"
                                                 value={formData.tipo_documento}
-                                                onChange={(e) => setFormData({...formData, tipo_documento: e.target.value})}
+                                                onChange={(e) => setFormData({ ...formData, tipo_documento: e.target.value })}
                                             >
                                                 <option value="DNI">DNI</option>
                                                 <option value="RUC">RUC</option>
@@ -290,50 +292,50 @@ const Clients = () => {
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-gray-500 uppercase">Número *</label>
-                                            <input 
+                                            <input
                                                 type="text" required
                                                 className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500"
                                                 value={formData.numero_documento}
-                                                onChange={(e) => setFormData({...formData, numero_documento: e.target.value})}
+                                                onChange={(e) => setFormData({ ...formData, numero_documento: e.target.value })}
                                             />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="text-xs font-bold text-gray-500 uppercase">Nombres *</label>
-                                            <input type="text" required className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.nombres} onChange={(e) => setFormData({...formData, nombres: e.target.value})} />
+                                            <input type="text" required className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.nombres} onChange={(e) => setFormData({ ...formData, nombres: e.target.value })} />
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-gray-500 uppercase">Apellidos</label>
-                                            <input type="text" className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.apellidos} onChange={(e) => setFormData({...formData, apellidos: e.target.value})} />
+                                            <input type="text" className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.apellidos} onChange={(e) => setFormData({ ...formData, apellidos: e.target.value })} />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="text-xs font-bold text-gray-500 uppercase">Teléfono *</label>
-                                            <input type="text" required className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} />
+                                            <input type="text" required className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.telefono} onChange={(e) => setFormData({ ...formData, telefono: e.target.value })} />
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-gray-500 uppercase">Email</label>
-                                            <input type="email" className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                                            <input type="email" className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                                         </div>
                                     </div>
                                     <div>
                                         <label className="text-xs font-bold text-gray-500 uppercase">Dirección</label>
-                                        <input type="text" className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value})} />
+                                        <input type="text" className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500" value={formData.direccion} onChange={(e) => setFormData({ ...formData, direccion: e.target.value })} />
                                     </div>
                                     <div>
                                         <label className="text-xs font-bold text-gray-500 uppercase">Notas Internas</label>
-                                        <textarea 
+                                        <textarea
                                             rows="3"
                                             className="w-full mt-1 p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none focus:ring-2 ring-blue-500"
                                             value={formData.notas}
-                                            onChange={(e) => setFormData({...formData, notas: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
                                             placeholder="Preferencias del cliente, observaciones..."
                                         />
                                     </div>
                                     <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 shadow-lg mt-4 flex items-center justify-center gap-2">
-                                        <Save size={20}/> GUARDAR CAMBIOS
+                                        <Save size={20} /> GUARDAR CAMBIOS
                                     </button>
                                 </form>
                             )}
@@ -351,8 +353,8 @@ const Clients = () => {
                                                     <p className="text-xs text-gray-500 dark:text-gray-300">{formatDate(ticket.fecha_recepcion)}</p>
                                                 </div>
                                                 <div className={`px-2 py-1 rounded text-xs font-bold 
-                                                    ${ticket.estado === 'ENTREGADO' ? 'bg-green-100 text-green-700' : 
-                                                      ticket.estado === 'CANCELADO' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                    ${ticket.estado === 'ENTREGADO' ? 'bg-green-100 text-green-700' :
+                                                        ticket.estado === 'CANCELADO' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
                                                     {ticket.estado}
                                                 </div>
                                             </div>
