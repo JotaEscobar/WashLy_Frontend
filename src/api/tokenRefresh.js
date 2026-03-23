@@ -1,6 +1,6 @@
 /**
  * Utilidad para refrescar el token JWT automáticamente
- * Se ejecuta cada 10 minutos (el token dura 15 minutos)
+ * Se ejecuta cada 25 minutos (el access token dura 30 minutos)
  */
 import { refreshTokenRequest } from './auth';
 import Cookies from 'js-cookie';
@@ -13,8 +13,8 @@ export const startTokenRefresh = () => {
         clearInterval(refreshInterval);
     }
 
-    // Refrescar cada 10 minutos (600,000 ms)
-    // El token dura 15 minutos, así que tenemos margen
+    // Refrescar cada 25 minutos (1,500,000 ms)
+    // El access token dura 30 minutos, así que tenemos 5 min de margen
     refreshInterval = setInterval(async () => {
         try {
             const token = Cookies.get('token');
@@ -29,9 +29,11 @@ export const startTokenRefresh = () => {
             const response = await refreshTokenRequest();
 
             if (response.data.access) {
+                const isProduction = window.location.protocol === 'https:';
                 Cookies.set('token', response.data.access, {
-                    expires: 1,  // 1 día
-                    sameSite: 'Lax'
+                    expires: 1,
+                    sameSite: 'Lax',
+                    secure: isProduction
                 });
                 // console.log('✅ Token refrescado exitosamente');
             }
@@ -47,7 +49,7 @@ export const startTokenRefresh = () => {
                 window.location.href = '/login';
             }
         }
-    }, 10 * 60 * 1000); // 10 minutos
+    }, 25 * 60 * 1000); // 25 minutos
 
     // console.log('✅ Auto-refresh de token JWT activado');
 };

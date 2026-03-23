@@ -105,9 +105,7 @@ const MainLayout = () => {
                 {/* Header Sidebar */}
                 <div className="h-20 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-700">
                     <div className={`flex items-center gap-3 transition-opacity duration-300 ${!isSidebarOpen && 'opacity-0 w-0 overflow-hidden'}`}>
-                        <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-500/30">
-                            W
-                        </div>
+                        <img src="/logo-whasly.png" alt="WashLy" className="w-14 h-14 object-contain drop-shadow-sm" />
                         <span className="font-bold text-xl tracking-tight text-gray-800 dark:text-white">WashLy</span>
                     </div>
                     <button

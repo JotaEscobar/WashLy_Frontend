@@ -1,9 +1,17 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { loginRequest, verifyTokenRequest } from '../api/auth';
 import Cookies from 'js-cookie';
-import { startTokenRefresh, stopTokenRefresh } from '../api/tokenRefresh';  // ✅ Import
+import { startTokenRefresh, stopTokenRefresh } from '../api/tokenRefresh';
 
 const AuthContext = createContext();
+
+// Opciones seguras para cookies
+const isProduction = window.location.protocol === 'https:';
+const COOKIE_OPTIONS = {
+  expires: 1,         // 1 día (el refresh se encarga de renovar el access)
+  sameSite: 'Lax',    // Protección CSRF
+  secure: isProduction // Solo HTTPS en producción
+};
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -35,8 +43,8 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       setIsAuthenticated(true);
 
-      // Guardar token en Cookies para axios
-      Cookies.set("token", userData.access, { expires: 1 });
+      // Guardar token en Cookie con opciones seguras
+      Cookies.set("token", userData.access, COOKIE_OPTIONS);
       localStorage.setItem('washly_user', JSON.stringify(userData));
 
       // ✅ Iniciar auto-refresh de tokens
@@ -61,6 +69,11 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAuthenticated(false);
     setErrors([]);
+  };
+
+  const updateUser = (newUserData) => {
+    setUser(newUserData);
+    localStorage.setItem('washly_user', JSON.stringify(newUserData));
   };
 
   useEffect(() => {
@@ -92,6 +105,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider value={{
       login,
       logout,
+      updateUser,
       user,
       isAuthenticated,
       loading,

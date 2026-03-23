@@ -18,12 +18,10 @@ import {
   CheckIcon,
   SparklesIcon,
   ArrowPathIcon,
-  MagnifyingGlassIcon,
-  UserIcon,
-  KeyIcon,
   EnvelopeIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 // --- SUB-COMPONENTES EXTRAÍDOS ---
 
@@ -541,7 +539,7 @@ const TabTickets = ({ empresa, setEmpresa, editMode, setEditMode, handleGuardar 
       />
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-6">
-          <div className="form-group">
+          <div className="form-group col-span-2">
             <label className="label">Prefijo Ticket</label>
             <input
               type="text"
@@ -552,26 +550,60 @@ const TabTickets = ({ empresa, setEmpresa, editMode, setEditMode, handleGuardar 
               placeholder="TK-"
             />
           </div>
-          <div className="form-group">
-            <label className="label">Días Entrega (Defecto)</label>
-            <input
-              type="number"
-              disabled={!editMode}
-              value={empresa?.ticket_dias_entrega || 2}
-              onChange={e => setEmpresa({ ...empresa, ticket_dias_entrega: e.target.value })}
-              className={!editMode ? 'input-readonly text-sm' : 'input text-sm'}
-            />
-          </div>
         </div>
         <div className="form-group">
-          <label className="label">Mensaje al Pie</label>
+          <label className="label">Mensaje al Pie Principal</label>
           <textarea
             disabled={!editMode}
             value={empresa?.ticket_mensaje_pie || ''}
             onChange={e => setEmpresa({ ...empresa, ticket_mensaje_pie: e.target.value })}
-            className={!editMode ? 'input-readonly min-h-[100px] py-3 text-sm' : 'input min-h-[100px] py-3 text-sm'}
+            className={!editMode ? 'input-readonly min-h-[80px] py-3 text-sm' : 'input min-h-[80px] py-3 text-sm'}
             rows="3"
             placeholder="Ej: Gracias por su preferencia..."
+          ></textarea>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="form-group">
+            <label className="label">Descripción de Servicios (Inline)</label>
+            <input
+              type="text"
+              disabled={!editMode}
+              value={empresa?.ticket_servicios_descripcion || ''}
+              onChange={e => setEmpresa({ ...empresa, ticket_servicios_descripcion: e.target.value })}
+              className={!editMode ? 'input-readonly text-sm' : 'input text-sm'}
+              placeholder="Ej: Lavado, tintorería, planchado..."
+            />
+          </div>
+          <div className="form-group">
+            <label className="label">Logo del Ticket</label>
+            {editMode ? (
+              <input
+                type="file"
+                accept="image/*"
+                onChange={e => {
+                  if (e.target.files && e.target.files[0]) {
+                    setEmpresa({ ...empresa, ticket_logo: e.target.files[0] });
+                  }
+                }}
+                className="input text-sm pt-2"
+              />
+            ) : (
+              <div className="mt-2 text-sm text-gray-500 font-medium">
+                {empresa?.ticket_logo ? "✓ Logo configurado para impresión" : "— Sin logo"}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="label">Disclaimer / Condiciones de Servicio</label>
+          <textarea
+            disabled={!editMode}
+            value={empresa?.ticket_disclaimer || ''}
+            onChange={e => setEmpresa({ ...empresa, ticket_disclaimer: e.target.value })}
+            className={!editMode ? 'input-readonly min-h-[100px] py-3 text-sm' : 'input min-h-[100px] py-3 text-sm'}
+            rows="4"
+            placeholder="Ej: No nos responsabilizamos por prendas extraviadas pasados los 30 días..."
           ></textarea>
         </div>
       </div>
@@ -845,6 +877,7 @@ const ModalPreciosManager = ({ modalPrecios, setModalPrecios, prendas, handleSav
 // --- COMPONENTE PRINCIPAL (CONTROLADOR) ---
 
 const Config = () => {
+  const { user, updateUser } = useAuth(); // Added useAuth hook
   const [activeTab, setActiveTab] = useState('negocio');
 
   // --- ESTADOS DE DATOS ---
@@ -925,7 +958,29 @@ const Config = () => {
     }
     setLoading(true);
     try {
-      await axios.patch(`/core/empresa/${empresa.id}/`, empresa);
+      let data = empresa;
+      let config = {};
+
+      // Support for binary file uploads (ticket_logo, logo, etc.)
+      const hasFiles = Object.values(empresa).some(val => val instanceof File);
+      if (hasFiles) {
+        data = new FormData();
+        Object.entries(empresa).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            // Avoid appending absolute urls as files if they are just strings from the initial fetch
+            if (!(typeof value === 'string' && value.startsWith('http')) || value instanceof File) {
+              data.append(key, value);
+            }
+          }
+        });
+        config = { headers: { 'Content-Type': 'multipart/form-data' } };
+      }
+
+      const response = await axios.patch(`/core/empresa/${empresa.id}/`, data, config);
+
+      // Update global context so tickets can print latest config
+      updateUser({ ...user, empresa: response.data });
+
       toast.success("Configuración actualizada correctamente");
       fetchInitialData();
     } catch (error) {
