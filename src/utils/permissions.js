@@ -7,6 +7,7 @@ export const ROLES = {
   ADMIN: 'ADMIN',
   CAJERO: 'CAJERO',
   OPERARIO: 'OPERARIO',
+  ADMIN_GLOBAL: 'ADMIN', // Mapear a ADMIN
 };
 
 export const PERMISSIONS = {
@@ -32,7 +33,7 @@ export const PERMISSIONS = {
 };
 
 // Rutas públicas o de sistema que no requieren verificación de rol (pero sí auth)
-export const COMMON_ROUTES = ['/expired', '/profile', '/404'];
+export const COMMON_ROUTES = ['/profile', '/404'];
 
 export const getLandingPage = (rol) => {
   switch (rol) {

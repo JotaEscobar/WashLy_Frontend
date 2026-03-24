@@ -13,6 +13,7 @@ const COOKIE_OPTIONS = {
   secure: isProduction // Solo HTTPS en producción
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within an AuthProvider");
@@ -25,15 +26,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState([]);
 
-  // Validar suscripción
-  const checkExpiration = (userData) => {
-    if (!userData?.empresa?.fecha_vencimiento) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiration = new Date(userData.empresa.fecha_vencimiento);
-    expiration.setHours(24, 0, 0, 0);
-    return today > expiration;
-  };
+
 
   const login = async (credentials) => {
     try {

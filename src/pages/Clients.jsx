@@ -147,7 +147,7 @@ const Clients = () => {
                             <tr>
                                 <th className="p-4">Cliente</th>
                                 <th className="p-4">Contacto</th>
-                                <th className="p-4">Dirección</th> {/* NUEVA COLUMNA */}
+                                <th className="p-4">Dirección</th>
                                 <th className="p-4">Última Visita</th>
                                 <th className="p-4 text-right">Saldo Pendiente</th>
                                 <th className="p-4 text-center">Acciones</th>

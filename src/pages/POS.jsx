@@ -9,6 +9,10 @@ import { useSedeStore } from '../stores/sedeStore';
 import PaymentMethodSelect from '../components/PaymentMethodSelect';
 import { printTicket } from '../utils/ticketPrinter';
 import { useAuth } from '../context/AuthContext';
+import { ModalInfo } from '../components/pos/ModalInfo';
+import { ModalPrendas } from '../components/pos/ModalPrendas';
+import { ModalCrearCliente } from '../components/pos/ModalCrearCliente';
+import { ModalExitoTicket } from '../components/pos/ModalExitoTicket';
 
 const POS = () => {
     const { currentSede } = useSedeStore();
@@ -334,176 +338,10 @@ const POS = () => {
     return (
         <div className="h-[calc(100vh-4rem)] flex gap-6 p-2 relative text-gray-800 dark:text-gray-100">
 
-            {/* MODAL GLOBAL (INFO/CONFIRM) */}
-            {infoModal.show && (
-                <div className="absolute inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center animate-in fade-in">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-96 text-center border border-gray-200 dark:border-gray-700">
-                        <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${infoModal.type === 'error' ? 'bg-red-100 text-red-500' :
-                            infoModal.type === 'success' ? 'bg-emerald-100 text-emerald-500' : 'bg-blue-100 text-blue-500'
-                            }`}>
-                            {infoModal.type === 'error' ? <AlertTriangle size={24} /> : <CheckCircle size={24} />}
-                        </div>
-                        <h3 className="text-lg font-bold mb-2 dark:text-white">{infoModal.title}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">{infoModal.message}</p>
-                        <div className="flex gap-2">
-                            {infoModal.showCancel && (
-                                <button onClick={closeInfoModal} className="flex-1 bg-gray-100 py-2.5 rounded-xl font-bold dark:bg-gray-700 dark:text-white hover:bg-gray-200">Cancelar</button>
-                            )}
-                            <button onClick={infoModal.action || closeInfoModal} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg">{infoModal.confirmText}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL SELECCIÓN DE PRENDAS (NUEVO) */}
-            {modalPrendas.show && (
-                <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700">
-                        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 rounded-t-2xl">
-                            <div>
-                                <h3 className="font-bold text-lg dark:text-white">{modalPrendas.service?.nombre}</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Seleccione la prenda específica</p>
-                            </div>
-                            <button onClick={() => setModalPrendas({ ...modalPrendas, show: false })} className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                                <input
-                                    type="text"
-                                    autoFocus
-                                    placeholder="Buscar prenda (ej. Camisa, Pantalón)..."
-                                    value={modalPrendas.searchTerm}
-                                    onChange={(e) => setModalPrendas({ ...modalPrendas, searchTerm: e.target.value })}
-                                    className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-2">
-                            {modalPrendas.loading ? (
-                                <div className="flex justify-center py-10"><Loader className="animate-spin text-blue-600" /></div>
-                            ) : (
-                                <div className="grid grid-cols-1 gap-2">
-                                    {modalPrendas.items
-                                        .filter(item => item.prenda_nombre.toLowerCase().includes(modalPrendas.searchTerm.toLowerCase()))
-                                        .map(item => (
-                                            <button
-                                                key={item.id}
-                                                onClick={() => addToCart(modalPrendas.service, item)}
-                                                className="flex justify-between items-center p-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-transparent hover:border-blue-100 dark:hover:border-blue-800 transition-all text-left group"
-                                            >
-                                                <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-300">{item.prenda_nombre}</span>
-                                                <span className="font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/40 px-2 py-1 rounded-lg text-sm">S/ {item.precio}</span>
-                                            </button>
-                                        ))}
-                                    {modalPrendas.items.length === 0 && !modalPrendas.loading && (
-                                        <div className="text-center py-8 text-gray-400 text-sm">
-                                            No hay prendas configuradas.<br />Vaya a Configuración &gt; Servicios.
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL CREAR CLIENTE */}
-            {showClientModal && (
-                <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-[500px] border border-gray-200 dark:border-gray-700 animate-in fade-in zoom-in">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
-                                <UserPlus className="text-blue-600" /> Nuevo Cliente
-                            </h2>
-                            <button onClick={() => setShowClientModal(false)} className="text-gray-400 hover:text-red-500 transition-colors">
-                                <X size={24} />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleCreateClient} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Tipo Doc.</label>
-                                    <select
-                                        className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none"
-                                        value={newClientData.tipo_documento}
-                                        onChange={(e) => setNewClientData({ ...newClientData, tipo_documento: e.target.value })}
-                                    >
-                                        <option value="DNI">DNI</option>
-                                        <option value="RUC">RUC</option>
-                                        <option value="CE">Carnet Ext.</option>
-                                        <option value="PASAPORTE">Pasaporte</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Nro Documento *</label>
-                                    <input
-                                        type="text" required
-                                        className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none"
-                                        value={newClientData.numero_documento}
-                                        onChange={(e) => setNewClientData({ ...newClientData, numero_documento: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Nombres *</label>
-                                    <input type="text" required className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.nombres} onChange={(e) => setNewClientData({ ...newClientData, nombres: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Apellidos</label>
-                                    <input type="text" className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.apellidos} onChange={(e) => setNewClientData({ ...newClientData, apellidos: e.target.value })} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Teléfono *</label>
-                                    <input type="text" required className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.telefono} onChange={(e) => setNewClientData({ ...newClientData, telefono: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Email</label>
-                                    <input type="email" className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.email} onChange={(e) => setNewClientData({ ...newClientData, email: e.target.value })} />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Dirección</label>
-                                <input type="text" className="w-full p-2.5 rounded-lg border dark:bg-gray-700 dark:border-gray-600 outline-none" value={newClientData.direccion} onChange={(e) => setNewClientData({ ...newClientData, direccion: e.target.value })} />
-                            </div>
-
-                            <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-all mt-2">
-                                GUARDAR CLIENTE
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL ÉXITO TICKET */}
-            {createdTicket && (
-                <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 w-96 text-center animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700">
-                        <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4 text-green-600 dark:text-green-400 mx-auto">
-                            <CheckCircle size={48} />
-                        </div>
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">¡Orden Emitida!</h2>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1">Ticket N° <span className="font-mono text-gray-900 dark:text-white font-bold">{createdTicket.numero_ticket}</span></p>
-
-                        <div className="mt-6 flex gap-3">
-                            <button onClick={handlePrintTicket} className="flex-1 btn-secondary py-3 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-bold flex justify-center gap-2 items-center hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                <Printer size={20} /> Imprimir
-                            </button>
-                            <button onClick={resetPOS} className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all">
-                                Nueva
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ModalInfo infoModal={infoModal} closeInfoModal={closeInfoModal} />
+            <ModalPrendas modalPrendas={modalPrendas} setModalPrendas={setModalPrendas} addToCart={addToCart} />
+            <ModalCrearCliente showClientModal={showClientModal} setShowClientModal={setShowClientModal} handleCreateClient={handleCreateClient} newClientData={newClientData} setNewClientData={setNewClientData} />
+            <ModalExitoTicket createdTicket={createdTicket} handlePrintTicket={handlePrintTicket} resetPOS={resetPOS} />
 
             {/* SECCIÓN IZQUIERDA */}
             <div className="w-[65%] flex flex-col gap-4">

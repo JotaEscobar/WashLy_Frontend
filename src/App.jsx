@@ -1,24 +1,36 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import MainLayout from './layouts/MainLayout';
-import Login from './pages/Login';
-import POS from './pages/POS';
-import Tickets from './pages/Tickets';
-import Payments from './pages/Payments';
-import Clients from './pages/Clients';
-import Inventory from './pages/Inventory';
-import Dashboard from './pages/Dashboard';
-import Config from './pages/Config.jsx';
 
-// Provider Panel
-import ProviderLayout from './layouts/ProviderLayout';
-import ProviderDashboard from './pages/ProviderDashboard';
-import ProviderBusinesses from './pages/ProviderBusinesses';
+// Rutas perezosas (Lazy load)
+const Login = lazy(() => import('./pages/Login'));
+const POS = lazy(() => import('./pages/POS'));
+const Tickets = lazy(() => import('./pages/Tickets'));
+const Payments = lazy(() => import('./pages/Payments'));
+const Clients = lazy(() => import('./pages/Clients'));
+const Inventory = lazy(() => import('./pages/Inventory'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Config = lazy(() => import('./pages/Config'));
+
+// Provider Panel (Lazy load)
+const ProviderLayout = lazy(() => import('./layouts/ProviderLayout'));
+const ProviderDashboard = lazy(() => import('./pages/ProviderDashboard'));
+const ProviderBusinesses = lazy(() => import('./pages/ProviderBusinesses'));
+
+const Loader = () => (
+    <div className="flex h-screen w-full items-center justify-center bg-gray-50/50 backdrop-blur-sm">
+        <div className="flex flex-col items-center">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent shadow-lg" />
+            <p className="mt-4 text-sm font-medium text-gray-500">Cargando aplicación...</p>
+        </div>
+    </div>
+);
 
 // Componente para proteger rutas
 const ProtectedRoute = ({ children }) => {
     const { user, loading } = useAuth();
-    if (loading) return <div className="flex h-screen items-center justify-center bg-gray-100">Cargando...</div>;
+    if (loading) return <Loader />;
     if (!user) return <Navigate to="/login" />;
     return children;
 };
@@ -26,8 +38,7 @@ const ProtectedRoute = ({ children }) => {
 // Componente para proteger rutas exclusivas de Super Administrador
 const SuperAdminRoute = ({ children }) => {
     const { user, loading } = useAuth();
-    if (loading) return <div className="flex h-screen items-center justify-center bg-gray-100">Cargando...</div>;
-    // Si no es superuser o no hay usuario, mandarlo al dashboard regular o login
+    if (loading) return <Loader />;
     if (!user) return <Navigate to="/login" />;
     if (!user.is_superuser) return <Navigate to="/dashboard" />;
     return children;
@@ -37,30 +48,32 @@ function App() {
     return (
         <AuthProvider>
             <BrowserRouter>
-                <Routes>
-                    <Route path="/login" element={<Login />} />
+                <Suspense fallback={<Loader />}>
+                    <Routes>
+                        <Route path="/login" element={<Login />} />
 
-                    {/* Rutas del Panel del Proveedor */}
-                    <Route element={<SuperAdminRoute><ProviderLayout /></SuperAdminRoute>}>
-                        <Route path="/provider/dashboard" element={<ProviderDashboard />} />
-                        <Route path="/provider/empresas" element={<ProviderBusinesses />} />
-                        <Route path="/provider" element={<Navigate to="/provider/dashboard" replace />} />
-                    </Route>
+                        {/* Rutas del Panel del Proveedor */}
+                        <Route element={<SuperAdminRoute><ProviderLayout /></SuperAdminRoute>}>
+                            <Route path="/provider/dashboard" element={<ProviderDashboard />} />
+                            <Route path="/provider/empresas" element={<ProviderBusinesses />} />
+                            <Route path="/provider" element={<Navigate to="/provider/dashboard" replace />} />
+                        </Route>
 
-                    {/* Rutas del Panel de Empresa */}
-                    <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/pos" element={<POS />} />
-                        <Route path="/tickets" element={<Tickets />} />
-                        <Route path="/pagos" element={<Payments />} />
-                        <Route path="/clientes" element={<Clients />} />
-                        <Route path="/inventario" element={<Inventory />} />
-                        <Route path="/config" element={<Config />} />
+                        {/* Rutas del Panel de Empresa */}
+                        <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+                            <Route path="/dashboard" element={<Dashboard />} />
+                            <Route path="/pos" element={<POS />} />
+                            <Route path="/tickets" element={<Tickets />} />
+                            <Route path="/pagos" element={<Payments />} />
+                            <Route path="/clientes" element={<Clients />} />
+                            <Route path="/inventario" element={<Inventory />} />
+                            <Route path="/config" element={<Config />} />
 
-                        {/* Redirección por defecto al Dashboard */}
-                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                    </Route>
-                </Routes>
+                            {/* Redirección por defecto al Dashboard */}
+                            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                        </Route>
+                    </Routes>
+                </Suspense>
             </BrowserRouter>
         </AuthProvider>
     );

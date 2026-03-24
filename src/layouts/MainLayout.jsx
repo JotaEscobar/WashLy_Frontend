@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSedeStore } from '../stores/sedeStore';
 
 // Roles
-const ROLES = { ADMIN: 'ADMIN', CAJERO: 'CAJERO', OPERARIO: 'OPERARIO' };
+const ROLES = { ADMIN: 'ADMIN', CAJERO: 'CAJERO', OPERARIO: 'OPERARIO', ADMIN_GLOBAL: 'ADMIN' };
 
 const MainLayout = () => {
     const [isSidebarOpen, setSidebarOpen] = useState(true);
