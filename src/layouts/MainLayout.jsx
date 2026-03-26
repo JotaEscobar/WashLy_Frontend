@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Menu, Moon, Sun, Home, Package, Users, Settings, LogOut, X, LayoutDashboard, CreditCard, Box, ShieldCheck } from 'lucide-react';
+import { Menu, Moon, Sun, Home, Package, Users, Settings, LogOut, X, LayoutDashboard, CreditCard, Box } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSedeStore } from '../stores/sedeStore';
 
@@ -132,16 +132,7 @@ const MainLayout = () => {
 
                 {/* Footer Sidebar */}
                 <div className="p-4 border-t border-gray-100 dark:border-gray-700 space-y-2">
-                    {/* Botón Panel Proveedor - Solo Super Administrador */}
-                    {user?.is_superuser && (
-                        <button
-                            onClick={() => navigate('/provider/dashboard')}
-                            className={`w-full flex items-center gap-3 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-100 dark:border-indigo-800 transition-colors ${!isSidebarOpen && 'justify-center'}`}
-                        >
-                            <ShieldCheck size={20} />
-                            {isSidebarOpen && <span className="font-semibold text-sm">Panel Proveedor</span>}
-                        </button>
-                    )}
+
 
                     <button
                         onClick={toggleTheme}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-    Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle, Lock, Ban, Truck, MessageSquare 
+    Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle, Lock, Ban, Truck, MessageSquare, Loader 
 } from 'lucide-react';
 
 
@@ -20,11 +20,11 @@ export const TicketDetailModal = (props) => {
 
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm fixed top-0 left-0 w-full h-full">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700 relative">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in border border-gray-200 dark:border-gray-700 relative overflow-hidden">
 
                 {/* ALERTAS Y CONFIRMACIONES */}
                 {modalConfig.show && (
-                    <div className="absolute inset-0 z-[60] flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl animate-in fade-in p-4">
+                    <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm rounded-2xl animate-in fade-in p-4">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-sm w-full text-center">
                             <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${modalConfig.type === 'money' ? 'bg-emerald-100 text-emerald-600' :
                                 ['danger', 'error'].includes(modalConfig.type) ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
@@ -36,12 +36,13 @@ export const TicketDetailModal = (props) => {
                             <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{modalConfig.message}</p>
                             <div className="flex gap-3">
                                 {modalConfig.action && (
-                                    <button onClick={closeModal} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-sm transition-colors">Cancelar</button>
+                                    <button onClick={closeModal} disabled={actionLoading} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-xl font-bold text-sm transition-colors disabled:opacity-50">Cancelar</button>
                                 )}
-                                <button onClick={modalConfig.action || closeModal} className={`flex-1 px-4 py-2 text-white rounded-xl font-bold text-sm shadow-lg transition-transform active:scale-95 ${modalConfig.type === 'money' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                                <button disabled={actionLoading} onClick={modalConfig.action || closeModal} className={`flex-1 px-4 py-2 text-white rounded-xl font-bold text-sm shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 ${modalConfig.type === 'money' ? 'bg-emerald-600 hover:bg-emerald-700' :
                                     ['danger', 'error'].includes(modalConfig.type) ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
                                     }`}>
-                                    {modalConfig.confirmText}
+                                    {actionLoading && <Loader className="animate-spin" size={16} />}
+                                    {actionLoading ? 'Procesando...' : modalConfig.confirmText}
                                 </button>
                             </div>
                         </div>

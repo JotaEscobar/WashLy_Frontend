@@ -188,21 +188,27 @@ const Tickets = () => {
 
     const executeStatusUpdate = async () => {
         setActionLoading(true);
-        closeModal();
         try {
             await api.post(`tickets/${selectedTicket.id}/update_estado/`, {
                 estado: newStatus,
                 comentario: statusComment || "Actualización rápida"
             });
+            
+            // Actualización optimista local sin recargar en blanco
+            setSelectedTicket(prev => prev ? { ...prev, estado: newStatus } : null);
             setSuccessMsg('Estado actualizado');
+            fetchTickets(); // Refresca lista de fondo
+            closeModal(); // Cerramos confirmación
+
             setTimeout(() => {
                 setSuccessMsg('');
-                handleViewDetails(selectedTicket.id);
-                fetchTickets();
             }, 1000);
         } catch (error) {
-            const msg = error.response?.data?.non_field_errors?.[0] || error.response?.data?.error || "Error al actualizar estado";
-            showAlert('Error al Actualizar', msg);
+            closeModal();
+            // Intenta extraer el error específico del estado
+            const errorEstado = error.response?.data?.estado?.[0];
+            const msg = errorEstado || error.response?.data?.non_field_errors?.[0] || error.response?.data?.error || "Error al actualizar estado";
+            showAlert('Regla de Negocio o Error', msg, 'error');
         } finally {
             setActionLoading(false);
         }
@@ -229,27 +235,24 @@ const Tickets = () => {
                 origen: 'TICKETS'
             });
 
+            // Actualización optimista del saldo local
+            const montoPago = parseFloat(payAmount);
+            setSelectedTicket(prev => prev ? { ...prev, saldo_pendiente: Math.max(0, prev.saldo_pendiente - montoPago) } : null);
+            
+            setSuccessMsg('Pago registrado correctamente');
             setShowPayModal(false);
             setPayAmount('');
             setModalConfig({ ...modalConfig, show: false });
-            setSuccessMsg('Pago registrado correctamente');
+            fetchTickets(); // Lista en 2do plano
 
             setTimeout(() => {
                 setSuccessMsg('');
-                handleViewDetails(selectedTicket.id);
-                fetchTickets();
             }, 1500);
 
         } catch (error) {
+            setModalConfig({ ...modalConfig, show: false });
             const serverError = error.response?.data?.error || error.response?.data?.detail || "No se pudo procesar el pago.";
-            setModalConfig({
-                show: true,
-                title: 'No se pudo pagar',
-                message: serverError,
-                type: 'error',
-                confirmText: 'Entendido',
-                action: null
-            });
+            showAlert('No se pudo pagar', serverError);
         } finally {
             setActionLoading(false);
         }

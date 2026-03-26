@@ -322,7 +322,7 @@ const Dashboard = () => {
                             </div>
                             <div className="flex-1 min-h-0 w-full">
                                 {analitica ? (
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                         <BarChart data={analitica.ventas_tendencia} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                                             <XAxis dataKey="fecha" tickFormatter={(str) => str.slice(8)} stroke="#9CA3AF" fontSize={10} tickLine={false} axisLine={false} />
@@ -343,7 +343,7 @@ const Dashboard = () => {
                                 <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Mix de Ingresos por Servicio</h3>
                                 <div className="flex-1 min-h-0 w-full">
                                     {analitica ? (
-                                        <ResponsiveContainer width="100%" height="100%">
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                             <PieChart>
                                                 <Pie data={analitica.top_servicios} cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={2} dataKey="value">
                                                     {analitica.top_servicios.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}

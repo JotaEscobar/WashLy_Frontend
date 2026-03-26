@@ -360,7 +360,7 @@ const Clients = () => {
                                             </div>
                                             <div className="flex justify-between items-end">
                                                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                                                    {ticket.es_extornable ? '⚠️ Posible error' : 'Servicio estándar'}
+                                                    {ticket.es_extornable ? 'Servicio extornable' : 'Servicio estándar'}
                                                 </span>
                                                 <div className="text-right">
                                                     <p className="font-black text-gray-900 dark:text-white">{formatCurrency(ticket.total)}</p>

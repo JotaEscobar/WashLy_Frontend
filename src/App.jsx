@@ -13,10 +13,7 @@ const Inventory = lazy(() => import('./pages/Inventory'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Config = lazy(() => import('./pages/Config'));
 
-// Provider Panel (Lazy load)
-const ProviderLayout = lazy(() => import('./layouts/ProviderLayout'));
-const ProviderDashboard = lazy(() => import('./pages/ProviderDashboard'));
-const ProviderBusinesses = lazy(() => import('./pages/ProviderBusinesses'));
+
 
 const Loader = () => (
     <div className="flex h-screen w-full items-center justify-center bg-gray-50/50 backdrop-blur-sm">
@@ -35,14 +32,7 @@ const ProtectedRoute = ({ children }) => {
     return children;
 };
 
-// Componente para proteger rutas exclusivas de Super Administrador
-const SuperAdminRoute = ({ children }) => {
-    const { user, loading } = useAuth();
-    if (loading) return <Loader />;
-    if (!user) return <Navigate to="/login" />;
-    if (!user.is_superuser) return <Navigate to="/dashboard" />;
-    return children;
-};
+
 
 function App() {
     return (
@@ -52,12 +42,7 @@ function App() {
                     <Routes>
                         <Route path="/login" element={<Login />} />
 
-                        {/* Rutas del Panel del Proveedor */}
-                        <Route element={<SuperAdminRoute><ProviderLayout /></SuperAdminRoute>}>
-                            <Route path="/provider/dashboard" element={<ProviderDashboard />} />
-                            <Route path="/provider/empresas" element={<ProviderBusinesses />} />
-                            <Route path="/provider" element={<Navigate to="/provider/dashboard" replace />} />
-                        </Route>
+
 
                         {/* Rutas del Panel de Empresa */}
                         <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>

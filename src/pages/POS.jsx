@@ -42,6 +42,7 @@ const POS = () => {
     // --- MODALES ---
     const [createdTicket, setCreatedTicket] = useState(null);
     const [showClientModal, setShowClientModal] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // NUEVO: Modal de selección de prendas
     const [modalPrendas, setModalPrendas] = useState({
@@ -267,6 +268,7 @@ const POS = () => {
 
     const handleEmitTicket = async () => {
         closeInfoModal();
+        setIsSubmitting(true);
 
         let montoEnviar = 0;
         if (paymentStatus !== 'PENDIENTE' && paymentAmount) {
@@ -298,6 +300,8 @@ const POS = () => {
         } catch (err) {
             console.error("Error:", err);
             showInfo("Error", err.response?.data?.error || "Error al emitir ticket", "error");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -548,8 +552,16 @@ const POS = () => {
                             <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Estimado</span>
                             <span className="text-3xl font-black text-gray-900 dark:text-white">S/ {total.toFixed(2)}</span>
                         </div>
-                        <button onClick={validateAndAskConfirmation} className="w-full bg-gray-900 dark:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-black dark:hover:bg-blue-700 shadow-lg shadow-gray-900/20 dark:shadow-blue-900/30 active:scale-95 transition-all flex justify-center gap-2 items-center">
-                            <Save size={20} /> EMITIR TICKET
+                        <button 
+                            onClick={validateAndAskConfirmation} 
+                            disabled={isSubmitting}
+                            className="w-full bg-gray-900 dark:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-black dark:hover:bg-blue-700 shadow-lg shadow-gray-900/20 dark:shadow-blue-900/30 active:scale-95 transition-all flex justify-center gap-2 items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isSubmitting ? (
+                                <><Loader className="animate-spin" size={20} /> PROCESANDO...</>
+                            ) : (
+                                <><Save size={20} /> EMITIR TICKET</>
+                            )}
                         </button>
                     </div>
                 </div>
