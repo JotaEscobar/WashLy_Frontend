@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Lock, User } from 'lucide-react';
 
@@ -80,6 +80,12 @@ const Login = () => {
                         Iniciar Sesión
                     </button>
                 </form>
+
+                <div className="mt-8 pt-6 border-t border-gray-100 text-center">
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                        Al ingresar, aceptas nuestros <Link to="/terminos" className="text-gray-500 hover:underline font-medium">Términos de Servicio</Link> y nuestra <Link to="/privacidad" className="text-gray-500 hover:underline font-medium">Política de Privacidad</Link>.
+                    </p>
+                </div>
             </div>
         </div>
     );

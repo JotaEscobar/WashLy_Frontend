@@ -1,6 +1,6 @@
-// utils/ticketPrinter.js
+import QRCode from 'qrcode';
 
-export const printTicket = (ticketData, empresaData = null) => {
+export const printTicket = async (ticketData, empresaData = null) => {
     // Si no tenemos empresaData global, asume un layout básico, aunque idealmente debería venir del Store o Backend.
     const empresaNombre = empresaData?.nombre || 'LAVANDERÍA SUPER CLEAN';
     const empresaRuc = empresaData?.ruc || '20601234567';
@@ -13,7 +13,19 @@ export const printTicket = (ticketData, empresaData = null) => {
     const disclaimer = empresaData?.ticket_disclaimer || '';
 
     const numero = ticketData.numero_ticket?.startsWith(prefijoTicket) ? ticketData.numero_ticket : `${prefijoTicket}${ticketData.numero_ticket || 'S/N'}`;
-    const qrUrl = ticketData.qr_code_url || ticketData.qr_code;
+    
+    // ✅ Generar QR como data URL — no necesita servidor ni auth
+    const qrData = `WASHLY|${ticketData.numero_ticket}|${ticketData.id}`;
+    let qrDataUrl = '';
+    try {
+        qrDataUrl = await QRCode.toDataURL(qrData, {
+            width: 100,
+            margin: 1,
+            color: { dark: '#000000', light: '#FFFFFF' }
+        });
+    } catch (e) {
+        console.error('Error generando QR:', e);
+    }
 
     // Verificaciones seguras (algunos DTOs envían cliente.nombres, otros cliente.nombre_completo)
     const clienteNombre = ticketData.cliente?.nombre_completo || ticketData.cliente_info?.nombre_completo || ticketData.cliente_nombre || 'Cliente Genérico';
@@ -98,7 +110,7 @@ export const printTicket = (ticketData, empresaData = null) => {
             </div>
             ${saldo <= 0 ? '<div class="watermark">¡PAGADO!</div>' : ''}
             <div class="qr-container">
-                ${qrUrl ? `<img src="${qrUrl}" />` : ''}
+                ${qrDataUrl ? `<img src="${qrDataUrl}" />` : ''}
                 <div class="qr-text">Escanear para ver estado</div>
                 <div class="qr-subtext">${mensajePie}</div>
             </div>

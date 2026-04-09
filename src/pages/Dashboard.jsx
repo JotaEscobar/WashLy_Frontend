@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useSedeStore } from '../stores/sedeStore';
 import { ModalReportes } from '../components/dashboard/ModalReportes';
+import { useAuth } from '../context/AuthContext';
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -57,9 +58,9 @@ const Dashboard = () => {
     // Sede store
     const { currentSede, sedesDisponibles, marcarSede } = useSedeStore();
 
-    // Obtener usuario actual
-    const storedUser = JSON.parse(localStorage.getItem('washly_user') || '{}');
-    const userRole = storedUser?.rol;
+    // Obtener usuario actual desde el contexto global (SaaS-ready)
+    const { user } = useAuth();
+    const userRole = user?.rol;
     const showSedeSelector = userRole === 'ADMIN' && sedesDisponibles.length > 1;
 
     const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#6366F1'];
@@ -69,12 +70,12 @@ const Dashboard = () => {
             setLoading({ kpis: true, op: true, ana: true });
             try {
                 const [kpiRes, opRes, anaRes, payRes, servRes, prodRes] = await Promise.all([
-                    api.get('/reportes/dashboard/kpis/'),
-                    api.get('/reportes/dashboard/operativo/'),
-                    api.get('/reportes/dashboard/analitica/'),
-                    api.get('/pagos/config/'),
-                    api.get('/categorias-servicio/'),
-                    api.get('/inventario/categorias/')
+                    api.get('reportes/dashboard/kpis/'),
+                    api.get('reportes/dashboard/operativo/'),
+                    api.get('reportes/dashboard/analitica/'),
+                    api.get('pagos/config/'),
+                    api.get('categorias-servicio/'),
+                    api.get('inventario/categorias/')
                 ]);
                 setKpis(kpiRes.data);
                 setOperativo(opRes.data);
@@ -101,7 +102,7 @@ const Dashboard = () => {
 
         try {
             // Construir URL con params
-            let url = `/reportes/exportar/pdf/?modulo=${reportConfig.module}`;
+            let url = `reportes/exportar/pdf/?modulo=${reportConfig.module}`;
 
             // Adjuntar fechas si aplica
             if (['TICKETS', 'PAGOS', 'VENTAS', 'CLIENTES', 'DIARIO_ELECTRONICO'].includes(reportConfig.module)) {
@@ -508,8 +509,8 @@ const Dashboard = () => {
             </div>
 
 
-            <ModalReportes 
-                showReportModal={showReportModal} 
+            <ModalReportes
+                showReportModal={showReportModal}
                 setShowReportModal={setShowReportModal}
                 reportConfig={reportConfig}
                 setReportConfig={setReportConfig}

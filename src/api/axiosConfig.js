@@ -3,7 +3,7 @@ import Cookies from 'js-cookie';
 
 const instance = axios.create({
     // ✅ Usar variable de entorno en lugar de URL hardcodeada
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+    baseURL: (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api/',
     timeout: 30000,  // ✅ Aumentado a 30s para reportes grandes
     headers: {
         'Content-Type': 'application/json',
@@ -26,7 +26,7 @@ instance.interceptors.request.use(
             if (sedeStorage) {
                 const { state } = JSON.parse(sedeStorage);
                 // Excluir rutas de auth para evitar conflictos
-                const isAuthRequest = config.url?.includes('/api/token');
+                const isAuthRequest = config.url?.includes('token/');
 
                 if (state?.currentSede?.id && !isAuthRequest) {
                     config.headers['X-Current-Sede-ID'] = state.currentSede.id;

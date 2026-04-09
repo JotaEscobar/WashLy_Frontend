@@ -193,7 +193,7 @@ const Tickets = () => {
                 estado: newStatus,
                 comentario: statusComment || "Actualización rápida"
             });
-            
+
             // Actualización optimista local sin recargar en blanco
             setSelectedTicket(prev => prev ? { ...prev, estado: newStatus } : null);
             setSuccessMsg('Estado actualizado');
@@ -238,7 +238,7 @@ const Tickets = () => {
             // Actualización optimista del saldo local
             const montoPago = parseFloat(payAmount);
             setSelectedTicket(prev => prev ? { ...prev, saldo_pendiente: Math.max(0, prev.saldo_pendiente - montoPago) } : null);
-            
+
             setSuccessMsg('Pago registrado correctamente');
             setShowPayModal(false);
             setPayAmount('');
@@ -286,9 +286,9 @@ const Tickets = () => {
         showConfirm('¿Cancelar Ticket?', 'Esta acción anulará el servicio. ¿Está seguro?', executeCancelTicket, 'danger');
     };
 
-    const handleReprintTicket = () => {
+    const handleReprintTicket = async () => {
         if (!selectedTicket) return;
-        printTicket(selectedTicket, user?.empresa);
+        await printTicket(selectedTicket, user?.empresa);
     };
 
     const filteredTickets = tickets.filter(t =>
@@ -316,18 +316,18 @@ const Tickets = () => {
             <TicketsTable loading={loading} filteredTickets={filteredTickets} getDateStatus={getDateStatus} getReadyTime={getReadyTime} getStatusBadge={getStatusBadge} handleViewDetails={handleViewDetails} fetchTickets={fetchTickets} prevPage={prevPage} nextPage={nextPage} />
 
             {/* --- MODAL DETALLE --- */}
-            <TicketDetailModal 
-                selectedTicket={selectedTicket} setSelectedTicket={setSelectedTicket} 
-                modalConfig={modalConfig} closeModal={closeModal} successMsg={successMsg} 
-                getStatusBadge={getStatusBadge} actionLoading={actionLoading} newStatus={newStatus} 
-                setNewStatus={setNewStatus} onSaveStatusClick={onSaveStatusClick} 
-                statusComment={statusComment} setStatusComment={setStatusComment} 
-                showCancelOptions={showCancelOptions} setShowCancelOptions={setShowCancelOptions} 
-                cancelReason={cancelReason} setCancelReason={setCancelReason} 
-                onConfirmCancelClick={onConfirmCancelClick} showPayModal={showPayModal} 
-                setShowPayModal={setShowPayModal} payAmount={payAmount} setPayAmount={setPayAmount} 
-                payMethod={payMethod} setPayMethod={setPayMethod} 
-                onRegisterPaymentClick={onRegisterPaymentClick} handleReprintTicket={handleReprintTicket} 
+            <TicketDetailModal
+                selectedTicket={selectedTicket} setSelectedTicket={setSelectedTicket}
+                modalConfig={modalConfig} closeModal={closeModal} successMsg={successMsg}
+                getStatusBadge={getStatusBadge} actionLoading={actionLoading} newStatus={newStatus}
+                setNewStatus={setNewStatus} onSaveStatusClick={onSaveStatusClick}
+                statusComment={statusComment} setStatusComment={setStatusComment}
+                showCancelOptions={showCancelOptions} setShowCancelOptions={setShowCancelOptions}
+                cancelReason={cancelReason} setCancelReason={setCancelReason}
+                onConfirmCancelClick={onConfirmCancelClick} showPayModal={showPayModal}
+                setShowPayModal={setShowPayModal} payAmount={payAmount} setPayAmount={setPayAmount}
+                payMethod={payMethod} setPayMethod={setPayMethod}
+                onRegisterPaymentClick={onRegisterPaymentClick} handleReprintTicket={handleReprintTicket}
             />
         </div>
     );

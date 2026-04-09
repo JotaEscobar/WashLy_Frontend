@@ -1,13 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   BuildingStorefrontIcon, CreditCardIcon, TagIcon, TicketIcon,
   UserGroupIcon, BellIcon, MapPinIcon, PencilIcon, TrashIcon,
   PlusIcon, QrCodeIcon, CurrencyDollarIcon, CheckIcon, XMarkIcon,
   ArrowPathIcon, SparklesIcon, EnvelopeIcon, UserIcon, KeyIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  PhotoIcon
 } from '@heroicons/react/24/outline';
 import { SectionHeader, ModalContainer } from './Shared';
-
 export const TabNegocio = ({
   empresa,
   setEmpresa,
@@ -19,31 +19,133 @@ export const TabNegocio = ({
   setModalSede,
   handleDeleteSede
 }) => {
+  const fileInputRef = useRef(null);
+  const [imageError, setImageError] = useState(false);
+
+  // Funciones auxiliares antes del early return para usarlas en hooks si es necesario
+  const getLogoUrl = () => {
+    if (!empresa?.logo) return null;
+
+    // 1. Si es un archivo local (previsualización de subida)
+    if (empresa.logo instanceof File) {
+      try {
+        return URL.createObjectURL(empresa.logo);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // 2. Si es una cadena (URL del servidor)
+    if (typeof empresa.logo === 'string') {
+      if (empresa.logo.startsWith('http')) return empresa.logo;
+      let baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      baseUrl = baseUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+      const path = empresa.logo.startsWith('/') ? empresa.logo : `/${empresa.logo}`;
+      return `${baseUrl}${path}`;
+    }
+    return null;
+  };
+
+  const logoUrl = getLogoUrl();
+
+  // Resetear error si cambia la URL (Hook incondicional en el top)
+  useEffect(() => {
+    setImageError(false);
+  }, [logoUrl]);
+
   if (!empresa) return <div className="p-12 text-center text-gray-400"><ArrowPathIcon className="h-8 w-8 animate-spin mx-auto" /> Cargando...</div>;
+
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setEmpresa({ ...empresa, logo: file });
+    }
+  };
+
+  const removeLogo = () => {
+    setEmpresa({ ...empresa, logo: null });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* INFO EMPRESA */}
       <div className="card">
-        <SectionHeader
-          title="Información del Negocio"
-          icon={BuildingStorefrontIcon}
-          actionButton={
-            !editMode ? (
-              <button onClick={() => setEditMode(true)} className="btn-secondary">
-                <PencilIcon className="h-4 w-4" /> Editar Datos
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button onClick={() => setEditMode(false)} className="btn-danger">Cancelar</button>
-                {/* CORRECCIÓN: Ahora setEditMode(false) se ejecuta al guardar */}
-                <button onClick={() => { handleGuardar(); setEditMode(false); }} disabled={loading} className="btn-primary">
-                  {loading ? 'Guardando...' : 'Guardar Cambios'}
+        <div className="flex flex-col md:flex-row gap-8 items-start mb-8 pb-6 border-b border-gray-100 dark:border-gray-700">
+          {/* LOGO CIRCULAR CRUD - ESTILO SOBRIO */}
+          <div className="relative group">
+            <div className={`w-24 h-24 rounded-full border border-gray-100 dark:border-gray-700 overflow-hidden flex items-center justify-center bg-gray-50 dark:bg-gray-800/50 transition-all shadow-sm
+              ${editMode ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50' : ''}`}
+              onClick={() => editMode && fileInputRef.current.click()}
+            >
+              {(logoUrl && !imageError) ? (
+                <img
+                  src={logoUrl}
+                  alt="Logo Negocio"
+                  className="w-full h-full object-contain p-2"
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                <PhotoIcon className="h-8 w-8 text-gray-200 dark:text-gray-700" />
+              )}
+
+              {editMode && (
+                <div className="absolute inset-0 bg-black/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <PencilIcon className="h-5 w-5 text-gray-400" />
+                </div>
+              )}
+            </div>
+
+            {editMode && (
+              <div className="absolute -top-1 -right-1 flex flex-col gap-1">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleLogoChange}
+                  className="hidden"
+                  accept="image/*"
+                />
+                <button
+                  onClick={() => fileInputRef.current.click()}
+                  className="p-1.5 bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-white rounded-full shadow-sm border border-gray-100 dark:border-gray-700 transition-all"
+                  title="Cambiar Logo"
+                >
+                  <PhotoIcon className="h-3.5 w-3.5" />
                 </button>
+                {empresa.logo && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeLogo(); }}
+                    className="p-1.5 bg-white dark:bg-gray-800 text-gray-400 hover:text-rose-500 rounded-full shadow-sm border border-gray-100 dark:border-gray-700 transition-all"
+                    title="Eliminar Logo"
+                  >
+                    <TrashIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
-            )
-          }
-        />
+            )}
+          </div>
+
+          <div className="flex-1 w-full">
+            <SectionHeader
+              title="Información del Negocio"
+              actionButton={
+                !editMode ? (
+                  <button onClick={() => setEditMode(true)} className="btn-secondary">
+                    <PencilIcon className="h-4 w-4" /> Editar Datos
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditMode(false)} className="btn-danger">Cancelar</button>
+                    <button onClick={() => { handleGuardar(); setEditMode(false); }} disabled={loading} className="btn-primary">
+                      {loading ? 'Guardando...' : 'Guardar Cambios'}
+                    </button>
+                  </div>
+                )
+              }
+            />
+            <p className="text-sm text-gray-500 -mt-4 mb-4">Configura los datos principales de tu empresa.</p>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="form-group">

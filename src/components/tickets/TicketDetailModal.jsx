@@ -2,6 +2,7 @@ import React from 'react';
 import { 
     Plus, Search, Eye, Clock, X, AlertTriangle, CheckCircle, Trash2, Wallet, ArrowRight, DollarSign, MapPin, Printer, ChevronLeft, ChevronRight, User, AlertCircle, Lock, Ban, Truck, MessageSquare, Loader 
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 
 import PaymentMethodSelect from '../../components/PaymentMethodSelect';
@@ -217,6 +218,20 @@ export const TicketDetailModal = (props) => {
                                     <p className="text-sm text-gray-600 dark:text-gray-300 italic break-words">
                                         {selectedTicket.observaciones || selectedTicket.notas || 'Sin observaciones.'}
                                     </p>
+                                </div>
+
+                                {/* QR Code Visualization */}
+                                <div className="pt-2 flex flex-col items-center justify-center border-t dark:border-gray-700">
+                                    <div className="bg-white p-2 rounded-lg shadow-sm">
+                                        <QRCodeSVG
+                                            value={`WASHLY|${selectedTicket.numero_ticket}|${selectedTicket.id}`}
+                                            size={100}
+                                            bgColor="#FFFFFF"
+                                            fgColor="#000000"
+                                            level="L"
+                                        />
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 mt-2 font-bold uppercase tracking-wider">Código de Seguimiento</span>
                                 </div>
 
                             </div>

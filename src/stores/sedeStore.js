@@ -16,7 +16,7 @@ export const useSedeStore = create(
             cargarSedes: async () => {
                 set({ isLoading: true });
                 try {
-                    const response = await api.get('/core/sedes/');
+                    const response = await api.get('core/sedes/');
                     // Manejar paginación de DRF
                     const sedes = Array.isArray(response.data) ? response.data : (response.data.results || []);
                     set({ sedesDisponibles: sedes });

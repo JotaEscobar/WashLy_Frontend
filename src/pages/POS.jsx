@@ -311,7 +311,7 @@ const POS = () => {
         setDeliveryDate(getDefaultDeliveryDate()); setCreatedTicket(null); setValidationError(null);
     };
 
-    const handlePrintTicket = () => {
+    const handlePrintTicket = async () => {
         if (!createdTicket) return;
 
         // Calculamos saldo inicial para la pre-impresión
@@ -332,7 +332,7 @@ const POS = () => {
             }))
         };
 
-        printTicket(ticketData, user?.empresa);
+        await printTicket(ticketData, user?.empresa);
     };
 
     const filteredServices = allServices.filter(s => selectedCategory ? s.categoria == selectedCategory : true);
@@ -552,8 +552,8 @@ const POS = () => {
                             <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Estimado</span>
                             <span className="text-3xl font-black text-gray-900 dark:text-white">S/ {total.toFixed(2)}</span>
                         </div>
-                        <button 
-                            onClick={validateAndAskConfirmation} 
+                        <button
+                            onClick={validateAndAskConfirmation}
                             disabled={isSubmitting}
                             className="w-full bg-gray-900 dark:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-black dark:hover:bg-blue-700 shadow-lg shadow-gray-900/20 dark:shadow-blue-900/30 active:scale-95 transition-all flex justify-center gap-2 items-center disabled:opacity-50 disabled:cursor-not-allowed"
                         >

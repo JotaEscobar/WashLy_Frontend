@@ -12,6 +12,9 @@ const Clients = lazy(() => import('./pages/Clients'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Config = lazy(() => import('./pages/Config'));
+const PrivacyPolicy = lazy(() => import('./pages/legal/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/legal/TermsOfService'));
+const PublicTracking = lazy(() => import('./pages/PublicTracking'));
 
 
 
@@ -40,7 +43,10 @@ function App() {
             <BrowserRouter>
                 <Suspense fallback={<Loader />}>
                     <Routes>
+                        <Route path="/seguimiento/:ticketId" element={<PublicTracking />} />
                         <Route path="/login" element={<Login />} />
+                        <Route path="/privacidad" element={<PrivacyPolicy />} />
+                        <Route path="/terminos" element={<TermsOfService />} />
 
 
 

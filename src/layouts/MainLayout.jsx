@@ -149,6 +149,7 @@ const MainLayout = () => {
                         <LogOut size={20} />
                         {isSidebarOpen && <span className="font-medium text-sm">Salir</span>}
                     </button>
+
                 </div>
             </aside>
 

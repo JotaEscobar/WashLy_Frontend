@@ -150,7 +150,7 @@ export const TabSuscripcion = ({ empresa, historial = [] }) => {
               <div className="flex gap-3">
                 <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">1</div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800 dark:text-white">Realiza el pago de <span className="text-blue-600">S/ 60.00</span></p>
+                  <p className="text-sm font-semibold text-gray-800 dark:text-white">Realiza el pago de <span className="text-blue-600">S/ 79.90</span></p>
                   <p className="text-xs text-gray-500 mt-1">Envía por <strong>Yape</strong> o <strong>Plin</strong> al número:</p>
                   <div className="mt-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 flex items-center justify-between">
                     <div>

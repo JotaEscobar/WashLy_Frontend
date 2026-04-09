@@ -4,9 +4,11 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 export const SectionHeader = ({ title, icon: Icon, actionButton }) => (
   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100 dark:border-gray-700">
     <div className="flex items-center gap-3">
-      <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
-        <Icon className="h-6 w-6" />
-      </div>
+      {Icon && (
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
+          <Icon className="h-6 w-6" />
+        </div>
+      )}
       <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
     </div>
     {actionButton}

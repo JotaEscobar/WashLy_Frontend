@@ -220,11 +220,7 @@ const Payments = () => {
             .filter(k => k !== 'comentarios')
             .reduce((sum, key) => sum + (parseFloat(cierreDetalle[key]) || 0), 0);
 
-        const detalleTexto = Object.keys(cierreDetalle)
-            .filter(k => k !== 'comentarios' && cierreDetalle[k])
-            .map(k => `${k}: S/${cierreDetalle[k]}`).join(', ');
-
-        const comentarioFinal = `${cierreDetalle.comentarios} | Detalle Cierre: [ ${detalleTexto} ]`;
+        const comentarioFinal = cierreDetalle.comentarios;
 
         try {
             closeModal();
